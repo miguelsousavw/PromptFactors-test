@@ -138,6 +138,8 @@ def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
                 value = _clean(row.get(key, ""))
                 if value and value not in fields:
                     fields.append(value)
+        if workbook.get("mapping"):
+            continue
         for rows in workbook.get("sheets", {}).values():
             for row in rows:
                 for value in row:
