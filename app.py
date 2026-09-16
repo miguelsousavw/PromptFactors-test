@@ -110,19 +110,34 @@ with left:
                     grouped: dict[str, list[dict]] = {}
                     for item in workbook["mapping"]:
                         grouped.setdefault(item["Source entity"] or "Other", []).append(item)
-                    entity_columns = st.columns(min(3, max(1, len(grouped))))
                     for index, (entity, fields) in enumerate(grouped.items()):
-                        with entity_columns[index % len(entity_columns)]:
-                            st.markdown(f"#### {entity}")
-                            for field in fields:
-                                source_field = field["Source field"] or "Unnamed source field"
-                                target_field = field["Target field"] or "Unnamed target field"
-                                required = " · required" if field["Required"] else ""
+                        with st.container(border=True):
+                            entity_col, fields_col = st.columns([1, 2], gap="large")
+                            with entity_col:
                                 st.markdown(
-                                    f"- `{source_field}` → **{target_field}**"
-                                    f"<br><small>{field['Type'] or 'Field'}{required}</small>",
+                                    f"<div style='padding-top:0.4rem;font-size:1.1rem;"
+                                    f"font-weight:700;color:#1f2937'>"
+                                    f"●&nbsp; {entity}</div>",
                                     unsafe_allow_html=True,
                                 )
+                            with fields_col:
+                                for field in fields:
+                                    source_field = field["Source field"] or "Unnamed source field"
+                                    target_field = field["Target field"] or ""
+                                    required = " · required" if field["Required"] else ""
+                                    detail = (
+                                        f"<small style='color:#667085'>"
+                                        f"{target_field}{required}</small>"
+                                        if target_field
+                                        else ""
+                                    )
+                                    st.markdown(
+                                        f"<div style='border-bottom:1px solid #E4E7EC;"
+                                        f"padding:0.22rem 0 0.35rem 0;margin-bottom:0.18rem'>"
+                                        f"<span style='color:#98A2B3'>——</span>&nbsp; "
+                                        f"<code>{source_field}</code> {detail}</div>",
+                                        unsafe_allow_html=True,
+                                    )
                 for sheet_name, rows in workbook["sheets"].items():
                     if not workbook.get("mapping"):
                         st.markdown(f"**Worksheet: {sheet_name}**")
