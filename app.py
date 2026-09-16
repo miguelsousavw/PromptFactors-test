@@ -105,6 +105,9 @@ with left:
             )
             for workbook in embedded_workbooks:
                 st.markdown(f"**{workbook['name']}**")
+                if workbook.get("mapping"):
+                    st.markdown("**Field-to-field mapping**")
+                    st.dataframe(workbook["mapping"], use_container_width=True, hide_index=True)
                 for sheet_name, rows in workbook["sheets"].items():
                     st.markdown(f"**Worksheet: {sheet_name}**")
                     st.dataframe(rows, use_container_width=True, hide_index=True)

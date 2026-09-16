@@ -65,7 +65,32 @@ def extract_embedded_workbooks(data: bytes, filename: str) -> list[dict]:
                         io.BytesIO(embedded), sheet_name=sheet, header=None, engine="openpyxl"
                     ).fillna("")
                     sheets[sheet] = frame.astype(str).values.tolist()
-                workbooks.append({"name": Path(member).name, "sheets": sheets})
+                mapping = []
+                for rows in sheets.values():
+                    header_index = next(
+                        (
+                            i for i, row in enumerate(rows)
+                            if "Technical API Field Name" in row
+                            and "Field Name" in row
+                        ),
+                        None,
+                    )
+                    if header_index is None:
+                        continue
+                    headers = rows[header_index]
+                    indexes = {value: i for i, value in enumerate(headers) if value}
+                    for row in rows[header_index + 1:]:
+                        source_field = row[indexes["Technical API Field Name"]].strip()
+                        target_field = row[indexes["Field Name"]].strip()
+                        if source_field or target_field:
+                            mapping.append({
+                                "Source entity": row[0].strip(),
+                                "Source field": source_field,
+                                "Target field": target_field,
+                                "Type": row[indexes.get("Type", 3)].strip(),
+                                "Required": row[indexes.get("Required\nY/N", 20)].strip(),
+                            })
+                workbooks.append({"name": Path(member).name, "sheets": sheets, "mapping": mapping})
             except Exception:
                 continue
     return workbooks

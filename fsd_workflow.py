@@ -133,6 +133,11 @@ def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
     """Collect source and target field names from embedded Excel mappings."""
     fields: list[str] = []
     for workbook in workbooks:
+        for row in workbook.get("mapping", []):
+            for key in ("Source field", "Target field"):
+                value = _clean(row.get(key, ""))
+                if value and value not in fields:
+                    fields.append(value)
         for rows in workbook.get("sheets", {}).values():
             for row in rows:
                 for value in row:
