@@ -137,6 +137,13 @@ def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
     """Create a small LeanIX-style context graph for one integration."""
     g = nx.MultiDiGraph()
     source, target = "source", "target"
+    # Streamlit may restore a profile serialized by an earlier app version
+    # before middleware_components was added. Keep those sessions usable.
+    middleware_components = list(
+        getattr(profile, "middleware_components", None)
+        or ([profile.middleware] if getattr(profile, "middleware", "") else [])
+        or ["Integration middleware"]
+    )
     g.add_node(source, name=profile.source_system, kind="application",
                criticality="business critical", domain="Source", lifecycle="Active",
                hosting="External", owner=profile.owner, processes=[], ghost=False)
@@ -144,7 +151,7 @@ def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
                criticality="business critical", domain="Target", lifecycle="Active",
                hosting="External", owner=profile.owner, processes=[], ghost=False)
     previous = source
-    for i, component in enumerate(profile.middleware_components):
+    for i, component in enumerate(middleware_components):
         middleware = f"middleware-{i}"
         g.add_node(middleware, name=component, kind="middleware",
                    criticality="business operational", domain="Integration",
