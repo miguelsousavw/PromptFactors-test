@@ -94,7 +94,9 @@ with left:
         st.text(text[:12000])
 
 with right:
-    st.subheader("LeanIX-style integration context")
+    st.subheader("How this integration works")
+    st.caption("Follow the arrows from left to right: the source sends information "
+               "through each integration service to the target.")
     diagram_mode = st.radio(
         "Diagram mode",
         ["Architectural/Interface", "Information flow"],
@@ -103,16 +105,23 @@ with right:
              "Information flow shows data objects and their information-flow edges.",
     )
     visible_graph = fsd_workflow.diagram_subgraph(graph, diagram_mode)
+    mode_copy = (
+        "Systems and middleware: the solid blue path shows the connection route."
+        if diagram_mode == "Architectural/Interface"
+        else "Information being moved: the dashed green paths show what is extracted and delivered."
+    )
+    st.info(mode_copy)
     st.plotly_chart(
         diagram.render(visible_graph, focus="middleware-0",
-                       title=f"{profile.source_system} → {profile.target_system} · {diagram_mode}",
+                       title=f"{profile.source_system}  →  {profile.target_system}",
                        show_labels=True, label_edges=True),
         use_container_width=True,
     )
     st.caption(
-        "Architectural/Interface: applications + middleware with interface edges. "
-        "Information flow: participants + data objects with information-flow edges."
+        "Hover over a node for the documented owner and context. "
+        "The diagram is derived deterministically from this FSD."
     )
+    st.caption(diagram.legend_note())
 
 st.divider()
 st.subheader("Ask about this integration")

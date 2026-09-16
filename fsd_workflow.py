@@ -150,6 +150,9 @@ def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
     g.add_node(target, name=profile.target_system, kind="application",
                criticality="business critical", domain="Target", lifecycle="Active",
                hosting="External", owner=profile.owner, processes=[], ghost=False)
+    edge_label = {"API": "API", "File transfer": "Files"}.get(
+        profile.interface_type, "Connects"
+    )
     previous = source
     for i, component in enumerate(middleware_components):
         middleware = f"middleware-{i}"
@@ -157,18 +160,18 @@ def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
                    criticality="business operational", domain="Integration",
                    lifecycle="Active", hosting="Cloud", owner=profile.owner,
                    processes=[], ghost=False)
-        g.add_edge(previous, middleware, kind="interface", label=profile.interface_type,
+        g.add_edge(previous, middleware, kind="interface", label=edge_label,
                    protocol=profile.interface_type, frequency=profile.schedule)
         previous = middleware
-    g.add_edge(previous, target, kind="interface", label=profile.interface_type,
+    g.add_edge(previous, target, kind="interface", label=edge_label,
                protocol=profile.interface_type, frequency=profile.schedule)
     for i, obj in enumerate(profile.data_objects[:5]):
         node = f"data-{i}"
         g.add_node(node, name=obj, kind="information_object", criticality="administrative",
                    domain="Information object", lifecycle="Active", hosting="Unknown",
                    owner=profile.owner, processes=[], ghost=False)
-        g.add_edge(source, node, kind="information_flow", label="extracts")
-        g.add_edge(node, target, kind="information_flow", label="delivers")
+        g.add_edge(source, node, kind="information_flow", label="Extracts")
+        g.add_edge(node, target, kind="information_flow", label="Delivers")
     return g
 
 

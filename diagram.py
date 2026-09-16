@@ -14,29 +14,29 @@ import networkx as nx
 import plotly.graph_objects as go
 
 EDGE_STYLE = {
-    "relationship":      {"color": "#8899A6", "dash": "dot",   "name": "Dependency"},
-    "interface":         {"color": "#1F6FEB", "dash": "solid", "name": "Interface"},
-    "information_flow":  {"color": "#12A150", "dash": "dash",  "name": "Information flow"},
+    "relationship": {"color": "#64748B", "dash": "dot", "name": "Dependency"},
+    "interface": {"color": "#155EEF", "dash": "solid", "name": "Interface"},
+    "information_flow": {"color": "#087443", "dash": "dash", "name": "Information flow"},
 }
 
 CRIT_COLOR = {
-    "mission critical":     "#C0392B",
-    "business critical":    "#E67E22",
-    "business operational": "#2E86C1",
-    "administrative":       "#7F8C8D",
+    "mission critical": "#B42318",
+    "business critical": "#D97706",
+    "business operational": "#175CD3",
+    "administrative": "#667085",
 }
-GHOST_COLOR = "#000000"
-FOCUS_RING = "#111111"
+GHOST_COLOR = "#344054"
+FOCUS_RING = "#101828"
 
 
 def _node_color(data: dict) -> str:
     if data.get("ghost"):
         return GHOST_COLOR
     if data.get("kind") == "middleware":
-        return "#8E44AD"
+        return "#7F56D9"
     if data.get("kind") == "information_object":
-        return "#16A085"
-    return CRIT_COLOR.get(str(data.get("criticality", "")).lower(), "#95A5A6")
+        return "#0086C9"
+    return CRIT_COLOR.get(str(data.get("criticality", "")).lower(), "#98A2B3")
 
 
 def _node_size(g: nx.MultiDiGraph, node: str, focus: str | None) -> int:
@@ -51,7 +51,6 @@ def _hover(node: str, data: dict, g: nx.MultiDiGraph) -> str:
     owner = data.get("owner") or ""
     lines = [
         f"<b>{data.get('name', node)}</b>",
-        f"ID: {node}",
         f"Domain: {data.get('domain', 'n/a')}",
         f"Criticality: {data.get('criticality', 'n/a')}",
         f"Lifecycle: {data.get('lifecycle', 'n/a')}",
@@ -67,6 +66,46 @@ def _hover(node: str, data: dict, g: nx.MultiDiGraph) -> str:
     return "<br>".join(lines)
 
 
+def _linear_positions(sub: nx.MultiDiGraph) -> dict[str, tuple[float, float]]:
+    """Place the integration backbone left-to-right and data on a middle rail."""
+    nodes = sorted(sub.nodes())
+    apps = [n for n in nodes if sub.nodes[n].get("kind") == "application"]
+    middleware = [n for n in nodes if sub.nodes[n].get("kind") == "middleware"]
+    data = [n for n in nodes if sub.nodes[n].get("kind") == "information_object"]
+    positions: dict[str, tuple[float, float]] = {}
+    source = next((n for n in apps if sub.in_degree(n) == 0), apps[0] if apps else None)
+    target = next((n for n in reversed(apps) if sub.out_degree(n) == 0),
+                  apps[-1] if apps else None)
+    if source is not None:
+        positions[source] = (0.0, 0.0)
+    if target is not None and target != source:
+        positions[target] = (1.0, 0.0)
+
+    ordered: list[str] = []
+    current = source
+    while current is not None:
+        nxt = next((t for _, t, d in sub.out_edges(current, data=True)
+                    if d.get("kind") == "interface"
+                    and sub.nodes[t].get("kind") == "middleware"
+                    and t not in ordered), None)
+        if nxt is None:
+            break
+        ordered.append(nxt)
+        current = nxt
+    ordered.extend(n for n in middleware if n not in ordered)
+    step = 1.0 / (len(ordered) + 1) if ordered else 1.0
+    for i, node in enumerate(ordered, 1):
+        positions[node] = (i * step, 0.0)
+    for i, node in enumerate(data):
+        positions[node] = (0.5, (i - (len(data) - 1) / 2) * 0.34)
+
+    # Keep future node types visible without reintroducing a force-directed layout.
+    missing = [n for n in nodes if n not in positions]
+    for i, node in enumerate(missing):
+        positions[node] = (0.5, (i - (len(missing) - 1) / 2) * 0.34)
+    return positions
+
+
 def render(sub: nx.MultiDiGraph, focus: str | None = None,
            title: str = "", show_labels: bool = True,
            label_edges: bool = False) -> go.Figure:
@@ -79,12 +118,8 @@ def render(sub: nx.MultiDiGraph, focus: str | None = None,
         fig.update_layout(height=560, xaxis=dict(visible=False), yaxis=dict(visible=False))
         return fig
 
-    # Deterministic layout: fixed seed + sorted node order.
-    simple = nx.Graph()
-    simple.add_nodes_from(sorted(sub.nodes()))
-    simple.add_edges_from({(s, t) for s, t in sub.edges() if s != t})
-    k = 1.9 / max(1, simple.number_of_nodes() ** 0.5)
-    pos = nx.spring_layout(simple, seed=42, k=k, iterations=220)
+    # Explicit stages make direction understandable without knowing graph IDs.
+    pos = _linear_positions(sub)
 
     # --- edges, grouped by kind so the legend is meaningful ------------------
     drawn: dict[str, list] = {kind: [] for kind in EDGE_STYLE}
@@ -149,7 +184,7 @@ def render(sub: nx.MultiDiGraph, focus: str | None = None,
         name="Participants / objects",
         text=[sub.nodes[n].get("name", n) if show_labels else "" for n in nodes],
         textposition="bottom center",
-        textfont=dict(size=9, color="#2C3E50"),
+        textfont=dict(size=12, color="#101828"),
         hovertext=[_hover(n, sub.nodes[n], sub) for n in nodes],
         hoverinfo="text",
         marker=dict(
@@ -164,25 +199,25 @@ def render(sub: nx.MultiDiGraph, focus: str | None = None,
     ))
 
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15)),
+        title=dict(text=title, font=dict(size=18, color="#101828")),
         annotations=annotations,
-        height=620,
-        margin=dict(l=10, r=10, t=48, b=10),
+        height=540,
+        margin=dict(l=24, r=24, t=58, b=24),
         hovermode="closest",
         plot_bgcolor="#FFFFFF",
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0),
-        xaxis=dict(visible=False, showgrid=False, zeroline=False),
-        yaxis=dict(visible=False, showgrid=False, zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                    font=dict(size=11, color="#344054")),
+        xaxis=dict(visible=False, showgrid=False, zeroline=False, range=[-0.12, 1.12]),
+        yaxis=dict(visible=False, showgrid=False, zeroline=False, range=[-1.0, 1.0]),
+        autosize=True,
     )
     return fig
 
 
 def legend_note() -> str:
     return (
-        "**Node colour** = business criticality "
-        "(red mission critical, orange business critical, blue operational, "
-        "grey administrative, **black = referenced but undefined**). "
-        "**Node size** = number of connections. "
-        "**Line style** = blue solid interface, green dashed information flow, "
-        "grey dotted dependency."
+        "**Colours:** applications use business criticality; purple = middleware; "
+        "teal = information objects; dark grey = referenced but undefined. "
+        "**Read left to right:** arrows show what connects or moves. "
+        "Solid blue = interface; dashed green = information flow."
     )
