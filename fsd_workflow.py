@@ -129,6 +129,34 @@ def mapping_sheet(tables: list[list[list[str]]]) -> list[list[str]]:
     return max(candidates, key=lambda item: (item[0], len(item[1])))[1]
 
 
+def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
+    """Collect source and target field names from embedded Excel mappings."""
+    fields: list[str] = []
+    for workbook in workbooks:
+        for rows in workbook.get("sheets", {}).values():
+            for row in rows:
+                for value in row:
+                    value = _clean(value)
+                    if (
+                        value
+                        and value.casefold() not in {"nan", "x"}
+                        and len(value) < 120
+                        and value not in fields
+                    ):
+                        fields.append(value)
+    # Keep the answer useful rather than returning every mapping comment/value.
+    headers = {
+        "technical api field name", "functional name", "field name",
+        "source application", "target application",
+    }
+    return [
+        value for value in fields
+        if value.casefold() not in headers
+        and not value.startswith("Unnamed:")
+        and "mapping direction" not in value.casefold()
+    ][:100]
+
+
 def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
               filename: str = "") -> FSDProfile:
     """Infer an integration profile using labels and conservative heuristics."""

@@ -58,14 +58,18 @@ if not st.session_state["fsd_bytes"]:
 def _extract(data: bytes, filename: str):
     text = document_ingest.extract_text(data, filename)
     tables = document_ingest.extract_tables(data, filename)
-    return text, fsd_workflow.parse_fsd(text, tables, filename), fsd_workflow.mapping_sheet(tables)
+    embedded = document_ingest.extract_embedded_workbooks(data, filename)
+    return text, fsd_workflow.parse_fsd(text, tables, filename), embedded
 
 
 with st.spinner("Extracting FSD and deriving integration profile…"):
     try:
-        text, profile, mapping_rows = _extract(
+        text, profile, embedded_workbooks = _extract(
             st.session_state["fsd_bytes"], st.session_state["fsd_name"]
         )
+        embedded_fields = fsd_workflow.embedded_mapping_fields(embedded_workbooks)
+        if embedded_fields:
+            profile.mapping_fields = embedded_fields
     except Exception as exc:
         st.error(f"Could not read this FSD: {exc}")
         st.stop()
@@ -95,15 +99,17 @@ with left:
     with st.expander("Extracted FSD text"):
         st.text(text[:12000])
     with st.expander("Mapping sheet", expanded=True):
-        if mapping_rows:
-            st.caption("Field and entity details extracted from the uploaded FSD.")
-            st.dataframe(
-                mapping_rows,
-                use_container_width=True,
-                hide_index=True,
+        if embedded_workbooks:
+            st.caption(
+                "This is the Excel mapping workbook embedded inside the uploaded FSD."
             )
+            for workbook in embedded_workbooks:
+                st.markdown(f"**{workbook['name']}**")
+                for sheet_name, rows in workbook["sheets"].items():
+                    st.markdown(f"**Worksheet: {sheet_name}**")
+                    st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
-            st.info("No readable mapping table was found in this FSD.")
+            st.info("No embedded Excel mapping workbook was found in this FSD.")
 
 with right:
     st.subheader("How this integration works")

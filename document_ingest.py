@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from zipfile import ZipFile
 
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".docx", ".pdf"}
@@ -37,6 +38,37 @@ def extract_tables(data: bytes, filename: str) -> list[list[list[str]]]:
     doc = Document(io.BytesIO(data))
     return [[[cell.text for cell in row.cells] for row in table.rows]
             for table in doc.tables]
+
+
+def extract_embedded_workbooks(data: bytes, filename: str) -> list[dict]:
+    """Extract Excel workbooks embedded inside a DOCX FSD.
+
+    Values are returned as plain lists so Streamlit can cache and display them
+    without retaining temporary files or exposing binary workbook contents.
+    """
+    if Path(filename).suffix.lower() != ".docx":
+        return []
+    workbooks: list[dict] = []
+    with ZipFile(io.BytesIO(data)) as archive:
+        for member in archive.namelist():
+            if "word/embeddings/" not in member.lower() or not member.lower().endswith(
+                (".xlsx", ".xlsm", ".xls")
+            ):
+                continue
+            try:
+                import pandas as pd
+                embedded = archive.read(member)
+                book = pd.ExcelFile(io.BytesIO(embedded), engine="openpyxl")
+                sheets = {}
+                for sheet in book.sheet_names:
+                    frame = pd.read_excel(
+                        io.BytesIO(embedded), sheet_name=sheet, header=None, engine="openpyxl"
+                    ).fillna("")
+                    sheets[sheet] = frame.astype(str).values.tolist()
+                workbooks.append({"name": Path(member).name, "sheets": sheets})
+            except Exception:
+                continue
+    return workbooks
 
 
 def candidate_prompt(text: str, known_applications: list[str]) -> str:
