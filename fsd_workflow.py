@@ -90,15 +90,18 @@ def _mapping_fields(tables: list[list[list[str]]]) -> list[str]:
         for row in table:
             cells = [_clean(cell) for cell in row]
             row_text = " ".join(cells).casefold()
-            if any(token in row_text for token in ("entity", "field", "attribute", "mapping")):
+            marker_index = next(
+                (i for i, cell in enumerate(cells)
+                 if cell.casefold().rstrip(":") in {"entity", "field", "attribute", "mapping"}),
+                None,
+            )
+            if marker_index is not None:
+                for cell in cells[marker_index + 1:]:
+                    add(cell)
+            elif "mapping" in row_text or "field" in row_text or "attribute" in row_text:
                 for cell in cells:
                     if len(cell) > 1 and not cell.endswith(":"):
                         add(cell)
-            if len(cells) >= 2 and cells[0].casefold() in {
-                "sf module", "active/inactive employee", "contingent workers",
-                "successfactors", "entity",
-            }:
-                add(cells[-1])
     return values[:40]
 
 
