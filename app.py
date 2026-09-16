@@ -153,7 +153,7 @@ with st.expander("Mapping sheet", expanded=True):
                         )
                         field_lines.append(
                             f"<div class='mapping-field'><span class='mapping-line'>"
-                            f"────────</span><span class='mapping-field-copy'>"
+                            f"···</span><span class='mapping-field-copy'>"
                             f"<b>{source_field}</b>{detail}</span></div>"
                         )
                     visual_rows.append(
@@ -166,16 +166,16 @@ with st.expander("Mapping sheet", expanded=True):
                 st.markdown(
                     "<style>"
                     ".mapping-visual{padding:18px 10px 8px;overflow-x:auto;}"
-                    ".mapping-entity-row{display:grid;grid-template-columns:minmax(150px,22%) minmax(0,1fr);"
-                    "column-gap:10px;align-items:start;margin:0 0 22px;}"
+                    ".mapping-entity-row{display:grid;grid-template-columns:minmax(140px,18%) minmax(0,1fr);"
+                    "column-gap:4px;align-items:start;margin:0 0 22px;}"
                     ".mapping-entity{display:flex;align-items:center;gap:10px;font-size:1.05rem;"
                     "font-weight:700;color:#1D2939;padding-top:7px;white-space:nowrap;}"
                     ".mapping-dot{color:#667085;font-size:.8rem;}"
                     ".mapping-fields{display:flex;flex-direction:column;gap:11px;min-width:0;}"
                     ".mapping-field{display:flex;align-items:flex-start;gap:10px;min-width:0;"
                     "font-size:.93rem;color:#344054;line-height:1.35;}"
-                    ".mapping-line{color:#98A2B3;letter-spacing:-3px;white-space:nowrap;padding-top:2px;"
-                    "font-size:.82rem;}"
+                    ".mapping-line{color:#98A2B3;letter-spacing:1px;white-space:nowrap;padding-top:2px;"
+                    "font-size:.72rem;}"
                     ".mapping-field-copy{min-width:0;overflow-wrap:anywhere;}"
                     ".mapping-target{display:block;color:#667085;font-size:.78rem;font-weight:400;margin-top:3px;}"
                     "@media(max-width:700px){.mapping-entity-row{grid-template-columns:1fr;row-gap:8px;"
