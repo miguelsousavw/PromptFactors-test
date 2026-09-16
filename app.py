@@ -98,60 +98,6 @@ with left:
     st.write(f"**Data objects**  \n{', '.join(profile.data_objects) or 'Not explicitly listed'}")
     with st.expander("Extracted FSD text"):
         st.text(text[:12000])
-    with st.expander("Mapping sheet", expanded=True):
-        if embedded_workbooks:
-            st.caption(
-                "This is the Excel mapping workbook embedded inside the uploaded FSD."
-            )
-            for workbook in embedded_workbooks:
-                st.markdown(f"**{workbook['name']}**")
-                if workbook.get("mapping"):
-                    st.markdown("**Fields grouped by source entity**")
-                    grouped: dict[str, list[dict]] = {}
-                    for item in workbook["mapping"]:
-                        grouped.setdefault(item["Source entity"] or "Other", []).append(item)
-                    visual_rows = []
-                    for entity, fields in grouped.items():
-                        field_lines = []
-                        for field in fields:
-                            source_field = field["Source field"] or "Unnamed source field"
-                            target_field = field["Target field"] or ""
-                            required = " · required" if field["Required"] else ""
-                            detail = (
-                                f"<span class='mapping-target'>{target_field}{required}</span>"
-                                if target_field else ""
-                            )
-                            field_lines.append(
-                                f"<div class='mapping-field'><span class='mapping-line'>"
-                                f"────────</span><span><b>{source_field}</b>{detail}</span></div>"
-                            )
-                        visual_rows.append(
-                            f"<div class='mapping-entity-row'>"
-                            f"<div class='mapping-entity'>●&nbsp; {entity}</div>"
-                            f"<div class='mapping-fields'>{''.join(field_lines)}</div>"
-                            f"</div>"
-                        )
-                    st.markdown(
-                        "<style>"
-                        ".mapping-visual{padding:8px 4px 4px 4px;}"
-                        ".mapping-entity-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(280px,2fr);"
-                        "column-gap:18px;align-items:start;margin:0 0 28px 0;}"
-                        ".mapping-entity{font-size:1.08rem;font-weight:700;color:#1f2937;padding-top:5px;}"
-                        ".mapping-fields{display:flex;flex-direction:column;gap:7px;}"
-                        ".mapping-field{display:flex;align-items:baseline;gap:8px;font-size:.96rem;color:#344054;}"
-                        ".mapping-line{color:#98a2b3;letter-spacing:-2px;white-space:nowrap;}"
-                        ".mapping-target{display:block;color:#667085;font-size:.78rem;margin-top:2px;}"
-                        "</style><div class='mapping-visual'>"
-                        + "".join(visual_rows)
-                        + "</div>",
-                        unsafe_allow_html=True,
-                    )
-                for sheet_name, rows in workbook["sheets"].items():
-                    if not workbook.get("mapping"):
-                        st.markdown(f"**Worksheet: {sheet_name}**")
-                        st.dataframe(rows, use_container_width=True, hide_index=True)
-        else:
-            st.info("No embedded Excel mapping workbook was found in this FSD.")
 
 with right:
     st.subheader("How this integration works")
@@ -182,6 +128,68 @@ with right:
         "The diagram is derived deterministically from this FSD."
     )
     st.caption(diagram.legend_note())
+
+with st.expander("Mapping sheet", expanded=True):
+    if embedded_workbooks:
+        st.caption(
+            "A visual view of the Excel mapping workbook embedded in this FSD."
+        )
+        for workbook in embedded_workbooks:
+            if workbook.get("mapping"):
+                grouped: dict[str, list[dict]] = {}
+                for item in workbook["mapping"]:
+                    grouped.setdefault(item["Source entity"] or "Other", []).append(item)
+                visual_rows = []
+                for entity, fields in grouped.items():
+                    field_lines = []
+                    for field in fields:
+                        source_field = field["Source field"] or "Unnamed source field"
+                        target_field = field["Target field"] or ""
+                        required = "required" if field["Required"] else ""
+                        detail = (
+                            f"<span class='mapping-target'>{target_field}"
+                            f"{' · ' if required else ''}{required}</span>"
+                            if target_field else ""
+                        )
+                        field_lines.append(
+                            f"<div class='mapping-field'><span class='mapping-line'>"
+                            f"────────</span><span class='mapping-field-copy'>"
+                            f"<b>{source_field}</b>{detail}</span></div>"
+                        )
+                    visual_rows.append(
+                        f"<div class='mapping-entity-row'>"
+                        f"<div class='mapping-entity'><span class='mapping-dot'>●</span>"
+                        f"<span>{entity}</span></div>"
+                        f"<div class='mapping-fields'>{''.join(field_lines)}</div>"
+                        f"</div>"
+                    )
+                st.markdown(
+                    "<style>"
+                    ".mapping-visual{padding:18px 10px 8px;overflow-x:auto;}"
+                    ".mapping-entity-row{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);"
+                    "column-gap:28px;align-items:start;margin:0 0 26px;}"
+                    ".mapping-entity{display:flex;align-items:center;gap:10px;font-size:1.05rem;"
+                    "font-weight:700;color:#1D2939;padding-top:7px;white-space:nowrap;}"
+                    ".mapping-dot{color:#667085;font-size:.8rem;}"
+                    ".mapping-fields{display:flex;flex-direction:column;gap:11px;min-width:0;}"
+                    ".mapping-field{display:flex;align-items:flex-start;gap:10px;min-width:0;"
+                    "font-size:.93rem;color:#344054;line-height:1.35;}"
+                    ".mapping-line{color:#98A2B3;letter-spacing:-2px;white-space:nowrap;padding-top:2px;}"
+                    ".mapping-field-copy{min-width:0;overflow-wrap:anywhere;}"
+                    ".mapping-target{display:block;color:#667085;font-size:.78rem;font-weight:400;margin-top:3px;}"
+                    "@media(max-width:700px){.mapping-entity-row{grid-template-columns:1fr;row-gap:8px;"
+                    "margin-bottom:20px}.mapping-fields{padding-left:10px}}"
+                    "</style><div class='mapping-visual'>"
+                    + "".join(visual_rows)
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                for sheet_name, rows in workbook["sheets"].items():
+                    st.markdown(f"**Worksheet: {sheet_name}**")
+                    st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        st.info("No embedded Excel mapping workbook was found in this FSD.")
 
 st.divider()
 st.subheader("Ask about this integration")
