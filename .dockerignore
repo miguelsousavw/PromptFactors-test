@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.llm_cache/
+.git/
+.DS_Store
+sample_ea_*.xlsx
