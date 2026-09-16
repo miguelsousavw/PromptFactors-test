@@ -125,16 +125,30 @@ with right:
 
 st.divider()
 st.subheader("Ask about this integration")
-st.caption("Answers are computed from extracted facts. Optional AI can improve phrasing, but never supplies facts.")
-for item in st.session_state["chat"]:
-    with st.chat_message(item["role"]):
-        st.markdown(item["content"])
-question = st.chat_input("e.g. What is the source system, schedule or owner?")
-if question:
-    st.session_state["chat"].append({"role": "user", "content": question})
-    answer = fsd_workflow.answer_question(question, profile)
-    st.session_state["chat"].append({"role": "assistant", "content": answer})
-    st.rerun()
+st.caption(
+    "Ask a question in plain language. Answers use only facts extracted from "
+    "this FSD, so they remain traceable and safe to review."
+)
+
+if not st.session_state["chat"]:
+    st.info(
+        "Try asking: **What is the source system?** · **What data is exchanged?** · "
+        "**How often does it run?** · **Who owns it?**"
+    )
+
+with st.container(border=True):
+    for item in st.session_state["chat"]:
+        with st.chat_message(item["role"]):
+            st.markdown(item["content"])
+
+    question = st.chat_input(
+        "Ask about the source, target, middleware, data, schedule or owner…"
+    )
+    if question:
+        st.session_state["chat"].append({"role": "user", "content": question})
+        answer = fsd_workflow.answer_question(question, profile)
+        st.session_state["chat"].append({"role": "assistant", "content": answer})
+        st.rerun()
 
 with st.expander("Optional AI phrasing"):
     st.caption("Leave the key blank for the deterministic workflow above.")
