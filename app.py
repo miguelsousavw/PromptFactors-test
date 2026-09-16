@@ -106,11 +106,27 @@ with left:
             for workbook in embedded_workbooks:
                 st.markdown(f"**{workbook['name']}**")
                 if workbook.get("mapping"):
-                    st.markdown("**Field-to-field mapping**")
-                    st.dataframe(workbook["mapping"], use_container_width=True, hide_index=True)
+                    st.markdown("**Fields grouped by source entity**")
+                    grouped: dict[str, list[dict]] = {}
+                    for item in workbook["mapping"]:
+                        grouped.setdefault(item["Source entity"] or "Other", []).append(item)
+                    entity_columns = st.columns(min(3, max(1, len(grouped))))
+                    for index, (entity, fields) in enumerate(grouped.items()):
+                        with entity_columns[index % len(entity_columns)]:
+                            st.markdown(f"#### {entity}")
+                            for field in fields:
+                                source_field = field["Source field"] or "Unnamed source field"
+                                target_field = field["Target field"] or "Unnamed target field"
+                                required = " · required" if field["Required"] else ""
+                                st.markdown(
+                                    f"- `{source_field}` → **{target_field}**"
+                                    f"<br><small>{field['Type'] or 'Field'}{required}</small>",
+                                    unsafe_allow_html=True,
+                                )
                 for sheet_name, rows in workbook["sheets"].items():
-                    st.markdown(f"**Worksheet: {sheet_name}**")
-                    st.dataframe(rows, use_container_width=True, hide_index=True)
+                    if not workbook.get("mapping"):
+                        st.markdown(f"**Worksheet: {sheet_name}**")
+                        st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
             st.info("No embedded Excel mapping workbook was found in this FSD.")
 
