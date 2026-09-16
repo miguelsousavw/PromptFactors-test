@@ -185,6 +185,11 @@ The **Quality & risk** tab is a review surface, not a dump. Every finding has an
 Accept checkbox; only accepted findings reach the export, and the manifest
 records that a human reviewed them. AI-generated text is never exported.
 
+The FSD workspace keeps middleware components distinct (for example, SAP CPI
+and Bentley RVS) and offers two deterministic diagram modes: **Architectural /
+Interface** (applications, middleware and interface edges) and **Information
+flow** (data objects and information-flow edges with their participants).
+
 ---
 
 ## Files

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import networkx as nx
 
@@ -20,6 +20,7 @@ class FSDProfile:
     description: str
     data_objects: list[str]
     encryption: str
+    middleware_components: list[str] = field(default_factory=lambda: ["Integration middleware"])
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -50,6 +51,28 @@ def _table_value(tables: list[list[list[str]]], row_label: str) -> str:
     return ""
 
 
+def _middleware_components(text: str, tables: list[list[list[str]]]) -> list[str]:
+    """Return distinct middleware/components in deterministic document order."""
+    labelled = _table_value(tables, "Middleware")
+    corpus = "\n".join(x for x in (labelled, text) if x)
+    found: list[str] = []
+
+    def add(name: str) -> None:
+        if name.casefold() not in {x.casefold() for x in found}:
+            found.append(name)
+
+    # These aliases occur in SAP FSDs and must not collapse CPI and RVS into
+    # one node.  SFTP is a transport endpoint, not middleware, so is omitted.
+    if re.search(r"\b(?:SAP\s+)?CPI\b|\bSCPI\b|SAP\s+Cloud\s+Platform\s+Integration",
+                 corpus, re.I):
+        add("SAP CPI")
+    if re.search(r"\b(?:Bentley\s+)?RVS\b", corpus, re.I):
+        add("RVS")
+    if re.search(r"\bSF[- ]Integration\s+Centre\b", corpus, re.I):
+        add("SF-Integration Centre")
+    return found or ["Integration middleware"]
+
+
 def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
               filename: str = "") -> FSDProfile:
     """Infer an integration profile using labels and conservative heuristics."""
@@ -68,9 +91,8 @@ def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
         name = re.sub(r"(?i)^fsd[_ -]*", "", filename.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
     name = _clean(name) or "FSD integration"
 
-    middleware = "SAP CPI" if re.search(r"\b(?:SAP\s+)?CPI\b|middleware", compact, re.I) else "Integration middleware"
-    if re.search(r"\bSFTP\b", compact, re.I):
-        middleware = "SAP CPI + SFTP/RVS"
+    middleware_components = _middleware_components(compact, tables)
+    middleware = " + ".join(middleware_components)
     if re.search(r"\bAPI\b", compact, re.I):
         interface_type = "API"
     elif re.search(r"\b(?:SFTP|CSV|flat file)\b", compact, re.I):
@@ -108,34 +130,58 @@ def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
     encryption = "Required" if re.search(r"encryption.*(?:required|requires)|PGP", compact, re.I) else "Not stated"
     return FSDProfile(name, source or "Source system not stated", target or "Target system not stated",
                       middleware, interface_type, criticality, schedule, owner,
-                      description, data_objects[:8], encryption)
+                      description, data_objects[:8], encryption, middleware_components)
 
 
 def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
     """Create a small LeanIX-style context graph for one integration."""
     g = nx.MultiDiGraph()
-    source, middleware, target = "source", "middleware", "target"
+    source, target = "source", "target"
     g.add_node(source, name=profile.source_system, kind="application",
                criticality="business critical", domain="Source", lifecycle="Active",
                hosting="External", owner=profile.owner, processes=[], ghost=False)
-    g.add_node(middleware, name=profile.middleware, kind="application",
-               criticality="business operational", domain="Integration", lifecycle="Active",
-               hosting="Cloud", owner=profile.owner, processes=[], ghost=False)
     g.add_node(target, name=profile.target_system, kind="application",
                criticality="business critical", domain="Target", lifecycle="Active",
                hosting="External", owner=profile.owner, processes=[], ghost=False)
-    g.add_edge(source, middleware, kind="interface", label=profile.interface_type,
-               protocol=profile.interface_type, frequency=profile.schedule)
-    g.add_edge(middleware, target, kind="interface", label=profile.interface_type,
+    previous = source
+    for i, component in enumerate(profile.middleware_components):
+        middleware = f"middleware-{i}"
+        g.add_node(middleware, name=component, kind="middleware",
+                   criticality="business operational", domain="Integration",
+                   lifecycle="Active", hosting="Cloud", owner=profile.owner,
+                   processes=[], ghost=False)
+        g.add_edge(previous, middleware, kind="interface", label=profile.interface_type,
+                   protocol=profile.interface_type, frequency=profile.schedule)
+        previous = middleware
+    g.add_edge(previous, target, kind="interface", label=profile.interface_type,
                protocol=profile.interface_type, frequency=profile.schedule)
     for i, obj in enumerate(profile.data_objects[:5]):
         node = f"data-{i}"
-        g.add_node(node, name=obj, kind="application", criticality="administrative",
+        g.add_node(node, name=obj, kind="information_object", criticality="administrative",
                    domain="Information object", lifecycle="Active", hosting="Unknown",
                    owner=profile.owner, processes=[], ghost=False)
         g.add_edge(source, node, kind="information_flow", label="extracts")
         g.add_edge(node, target, kind="information_flow", label="delivers")
     return g
+
+
+def diagram_subgraph(graph: nx.MultiDiGraph, mode: str) -> nx.MultiDiGraph:
+    """Select one of the two supported FSD diagram modes."""
+    if mode == "Architectural/Interface":
+        kinds = {"interface"}
+        keep = {n for n, d in graph.nodes(data=True)
+                if d.get("kind") in {"application", "middleware"}}
+    elif mode == "Information flow":
+        kinds = {"information_flow"}
+        keep = set(graph.nodes)
+    else:
+        raise ValueError("mode must be Architectural/Interface or Information flow")
+    out = nx.MultiDiGraph()
+    out.add_nodes_from((n, graph.nodes[n]) for n in sorted(keep))
+    for s, t, data in graph.edges(data=True):
+        if s in keep and t in keep and data.get("kind") in kinds:
+            out.add_edge(s, t, **data)
+    return out
 
 
 def answer_question(question: str, profile: FSDProfile) -> str:

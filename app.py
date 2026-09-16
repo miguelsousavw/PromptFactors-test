@@ -95,15 +95,23 @@ with left:
 
 with right:
     st.subheader("LeanIX-style integration context")
+    diagram_mode = st.radio(
+        "Diagram mode",
+        ["Architectural/Interface", "Information flow"],
+        horizontal=True,
+        help="Architectural/Interface shows applications, middleware and interfaces. "
+             "Information flow shows data objects and their information-flow edges.",
+    )
+    visible_graph = fsd_workflow.diagram_subgraph(graph, diagram_mode)
     st.plotly_chart(
-        diagram.render(graph, focus="middleware",
-                       title=f"{profile.source_system} → {profile.target_system}",
+        diagram.render(visible_graph, focus="middleware-0",
+                       title=f"{profile.source_system} → {profile.target_system} · {diagram_mode}",
                        show_labels=True, label_edges=True),
         use_container_width=True,
     )
     st.caption(
-        "Blue solid lines are interfaces; green dashed lines are information flows. "
-        "The central node is the integration/middleware boundary."
+        "Architectural/Interface: applications + middleware with interface edges. "
+        "Information flow: participants + data objects with information-flow edges."
     )
 
 st.divider()

@@ -32,6 +32,10 @@ FOCUS_RING = "#111111"
 def _node_color(data: dict) -> str:
     if data.get("ghost"):
         return GHOST_COLOR
+    if data.get("kind") == "middleware":
+        return "#8E44AD"
+    if data.get("kind") == "information_object":
+        return "#16A085"
     return CRIT_COLOR.get(str(data.get("criticality", "")).lower(), "#95A5A6")
 
 
@@ -142,7 +146,7 @@ def render(sub: nx.MultiDiGraph, focus: str | None = None,
         x=[pos[n][0] for n in nodes],
         y=[pos[n][1] for n in nodes],
         mode="markers+text" if show_labels else "markers",
-        name="Applications",
+        name="Participants / objects",
         text=[sub.nodes[n].get("name", n) if show_labels else "" for n in nodes],
         textposition="bottom center",
         textfont=dict(size=9, color="#2C3E50"),
