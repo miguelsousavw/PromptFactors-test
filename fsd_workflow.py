@@ -167,6 +167,14 @@ def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
     ][:100]
 
 
+def normalize_mapping_entity(value: str) -> str:
+    """Use one display label for equivalent SuccessFactors entity aliases."""
+    cleaned = _clean(value)
+    if cleaned.casefold() in {"emjob", "empjob"}:
+        return "EmpJob"
+    return cleaned or "Other"
+
+
 def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
               filename: str = "") -> FSDProfile:
     """Infer an integration profile using labels and conservative heuristics."""

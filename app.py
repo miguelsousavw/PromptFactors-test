@@ -138,7 +138,8 @@ with st.expander("Mapping sheet", expanded=True):
             if workbook.get("mapping"):
                 grouped: dict[str, list[dict]] = {}
                 for item in workbook["mapping"]:
-                    grouped.setdefault(item["Source entity"] or "Other", []).append(item)
+                    entity = fsd_workflow.normalize_mapping_entity(item["Source entity"])
+                    grouped.setdefault(entity, []).append(item)
                 visual_rows = []
                 for entity, fields in grouped.items():
                     field_lines = []
