@@ -132,12 +132,13 @@ def mapping_sheet(tables: list[list[list[str]]]) -> list[list[str]]:
 def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
     """Collect source and target field names from embedded Excel mappings."""
     fields: list[str] = []
+    mapping_fields: list[str] = []
     for workbook in workbooks:
         for row in workbook.get("mapping", []):
             for key in ("Source field", "Target field"):
                 value = _clean(row.get(key, ""))
-                if value and value not in fields:
-                    fields.append(value)
+                if value and value not in mapping_fields:
+                    mapping_fields.append(value)
         if workbook.get("mapping"):
             continue
         for rows in workbook.get("sheets", {}).values():
@@ -156,6 +157,8 @@ def embedded_mapping_fields(workbooks: list[dict]) -> list[str]:
         "technical api field name", "functional name", "field name",
         "source application", "target application",
     }
+    if mapping_fields:
+        return mapping_fields[:100]
     return [
         value for value in fields
         if value.casefold() not in headers
