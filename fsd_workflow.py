@@ -183,7 +183,14 @@ def diagram_subgraph(graph: nx.MultiDiGraph, mode: str) -> nx.MultiDiGraph:
                 if d.get("kind") in {"application", "middleware"}}
     elif mode == "Information flow":
         kinds = {"information_flow"}
-        keep = set(graph.nodes)
+        # Keep only participants connected by information-flow edges. This
+        # intentionally hides the architectural middleware layer in this view.
+        keep = {
+            node
+            for source, target, data in graph.edges(data=True)
+            if data.get("kind") in kinds
+            for node in (source, target)
+        }
     else:
         raise ValueError("mode must be Architectural/Interface or Information flow")
     out = nx.MultiDiGraph()
