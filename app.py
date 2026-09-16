@@ -110,34 +110,42 @@ with left:
                     grouped: dict[str, list[dict]] = {}
                     for item in workbook["mapping"]:
                         grouped.setdefault(item["Source entity"] or "Other", []).append(item)
-                    for index, (entity, fields) in enumerate(grouped.items()):
-                        with st.container(border=True):
-                            entity_col, fields_col = st.columns([1, 2], gap="large")
-                            with entity_col:
-                                st.markdown(
-                                    f"<div style='padding-top:0.4rem;font-size:1.1rem;"
-                                    f"font-weight:700;color:#1f2937'>"
-                                    f"●&nbsp; {entity}</div>",
-                                    unsafe_allow_html=True,
-                                )
-                            with fields_col:
-                                for field in fields:
-                                    source_field = field["Source field"] or "Unnamed source field"
-                                    target_field = field["Target field"] or ""
-                                    required = " · required" if field["Required"] else ""
-                                    detail = (
-                                        f"<small style='color:#667085'>"
-                                        f"{target_field}{required}</small>"
-                                        if target_field
-                                        else ""
-                                    )
-                                    st.markdown(
-                                        f"<div style='border-bottom:1px solid #E4E7EC;"
-                                        f"padding:0.22rem 0 0.35rem 0;margin-bottom:0.18rem'>"
-                                        f"<span style='color:#98A2B3'>——</span>&nbsp; "
-                                        f"<code>{source_field}</code> {detail}</div>",
-                                        unsafe_allow_html=True,
-                                    )
+                    visual_rows = []
+                    for entity, fields in grouped.items():
+                        field_lines = []
+                        for field in fields:
+                            source_field = field["Source field"] or "Unnamed source field"
+                            target_field = field["Target field"] or ""
+                            required = " · required" if field["Required"] else ""
+                            detail = (
+                                f"<span class='mapping-target'>{target_field}{required}</span>"
+                                if target_field else ""
+                            )
+                            field_lines.append(
+                                f"<div class='mapping-field'><span class='mapping-line'>"
+                                f"────────</span><span><b>{source_field}</b>{detail}</span></div>"
+                            )
+                        visual_rows.append(
+                            f"<div class='mapping-entity-row'>"
+                            f"<div class='mapping-entity'>●&nbsp; {entity}</div>"
+                            f"<div class='mapping-fields'>{''.join(field_lines)}</div>"
+                            f"</div>"
+                        )
+                    st.markdown(
+                        "<style>"
+                        ".mapping-visual{padding:8px 4px 4px 4px;}"
+                        ".mapping-entity-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(280px,2fr);"
+                        "column-gap:18px;align-items:start;margin:0 0 28px 0;}"
+                        ".mapping-entity{font-size:1.08rem;font-weight:700;color:#1f2937;padding-top:5px;}"
+                        ".mapping-fields{display:flex;flex-direction:column;gap:7px;}"
+                        ".mapping-field{display:flex;align-items:baseline;gap:8px;font-size:.96rem;color:#344054;}"
+                        ".mapping-line{color:#98a2b3;letter-spacing:-2px;white-space:nowrap;}"
+                        ".mapping-target{display:block;color:#667085;font-size:.78rem;margin-top:2px;}"
+                        "</style><div class='mapping-visual'>"
+                        + "".join(visual_rows)
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
                 for sheet_name, rows in workbook["sheets"].items():
                     if not workbook.get("mapping"):
                         st.markdown(f"**Worksheet: {sheet_name}**")
