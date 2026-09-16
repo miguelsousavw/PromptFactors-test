@@ -105,6 +105,30 @@ def _mapping_fields(tables: list[list[list[str]]]) -> list[str]:
     return values[:40]
 
 
+def mapping_sheet(tables: list[list[list[str]]]) -> list[list[str]]:
+    """Return the most relevant field/entity table for display in the UI."""
+    candidates: list[tuple[int, list[list[str]]]] = []
+    for table in tables:
+        rows = [[_clean(cell) for cell in row] for row in table]
+        text = " ".join(" ".join(row) for row in rows).casefold()
+        score = 0
+        if "mapping" in text:
+            score += 4
+        if "field" in text or "attribute" in text:
+            score += 3
+        if "entity" in text:
+            score += 2
+        if "successfactors" in text:
+            score += 1
+        if any(token in text for token in ("employee", "empemployment", "empjob", "workorder")):
+            score += 3
+        if score:
+            candidates.append((score, rows))
+    if not candidates:
+        return []
+    return max(candidates, key=lambda item: (item[0], len(item[1])))[1]
+
+
 def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
               filename: str = "") -> FSDProfile:
     """Infer an integration profile using labels and conservative heuristics."""
