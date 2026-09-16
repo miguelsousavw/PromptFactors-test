@@ -21,6 +21,7 @@ class FSDProfile:
     data_objects: list[str]
     encryption: str
     middleware_components: list[str] = field(default_factory=lambda: ["Integration middleware"])
+    mapping_fields: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -73,6 +74,34 @@ def _middleware_components(text: str, tables: list[list[list[str]]]) -> list[str
     return found or ["Integration middleware"]
 
 
+def _mapping_fields(tables: list[list[list[str]]]) -> list[str]:
+    """Extract human-readable mapping/entity names from FSD tables."""
+    values: list[str] = []
+
+    def add(value: str) -> None:
+        value = _clean(value)
+        if not value or value.casefold() in {x.casefold() for x in values}:
+            return
+        if value.casefold() in {"x", "file", "operation", "other", "parameters", "value"}:
+            return
+        values.append(value)
+
+    for table in tables:
+        for row in table:
+            cells = [_clean(cell) for cell in row]
+            row_text = " ".join(cells).casefold()
+            if any(token in row_text for token in ("entity", "field", "attribute", "mapping")):
+                for cell in cells:
+                    if len(cell) > 1 and not cell.endswith(":"):
+                        add(cell)
+            if len(cells) >= 2 and cells[0].casefold() in {
+                "sf module", "active/inactive employee", "contingent workers",
+                "successfactors", "entity",
+            }:
+                add(cells[-1])
+    return values[:40]
+
+
 def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
               filename: str = "") -> FSDProfile:
     """Infer an integration profile using labels and conservative heuristics."""
@@ -92,6 +121,7 @@ def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
     name = _clean(name) or "FSD integration"
 
     middleware_components = _middleware_components(compact, tables)
+    mapping_fields = _mapping_fields(tables)
     middleware = " + ".join(middleware_components)
     if re.search(r"\bAPI\b", compact, re.I):
         interface_type = "API"
@@ -130,7 +160,8 @@ def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
     encryption = "Required" if re.search(r"encryption.*(?:required|requires)|PGP", compact, re.I) else "Not stated"
     return FSDProfile(name, source or "Source system not stated", target or "Target system not stated",
                       middleware, interface_type, criticality, schedule, owner,
-                      description, data_objects[:8], encryption, middleware_components)
+                      description, data_objects[:8], encryption, middleware_components,
+                      mapping_fields)
 
 
 def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
@@ -217,6 +248,11 @@ def answer_question(question: str, profile: FSDProfile) -> str:
     if any(x in q for x in ("data", "object", "payload")):
         objects = ", ".join(profile.data_objects) or "not explicitly listed"
         return f"Identified data objects: **{objects}**."
+    if any(x in q for x in ("field", "mapping", "attribute", "used")):
+        fields = ", ".join(getattr(profile, "mapping_fields", []) or profile.data_objects)
+        if fields:
+            return f"The FSD mapping uses these documented fields/entities: **{fields}**."
+        return "The FSD does not contain readable field-level mapping entries."
     return (f"This is a **{profile.interface_type}** integration from **{profile.source_system}** "
             f"to **{profile.target_system}** via **{profile.middleware}**. "
             "Try asking about source, target, owner, schedule, criticality, or data.")
