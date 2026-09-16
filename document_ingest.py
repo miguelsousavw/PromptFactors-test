@@ -19,10 +19,24 @@ def extract_text(data: bytes, filename: str) -> str:
     if suffix == ".docx":
         from docx import Document
         doc = Document(io.BytesIO(data))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                parts.append(" | ".join(cell.text.strip() for cell in row.cells))
+        return "\n".join(parts)
     from pypdf import PdfReader
     reader = PdfReader(io.BytesIO(data))
     return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def extract_tables(data: bytes, filename: str) -> list[list[list[str]]]:
+    """Return DOCX tables as plain values for deterministic labelled-field parsing."""
+    if Path(filename).suffix.lower() != ".docx":
+        return []
+    from docx import Document
+    doc = Document(io.BytesIO(data))
+    return [[[cell.text for cell in row.cells] for row in table.rows]
+            for table in doc.tables]
 
 
 def candidate_prompt(text: str, known_applications: list[str]) -> str:
