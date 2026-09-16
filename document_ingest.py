@@ -70,25 +70,36 @@ def extract_embedded_workbooks(data: bytes, filename: str) -> list[dict]:
                     header_index = next(
                         (
                             i for i, row in enumerate(rows)
-                            if "Technical API Field Name" in row
-                            and "Field Name" in row
+                            if any("technical api field" in value.casefold() for value in row)
+                            and any(
+                                value.casefold().strip() in {"field name", "target field"}
+                                for value in row
+                            )
                         ),
                         None,
                     )
                     if header_index is None:
                         continue
                     headers = rows[header_index]
-                    indexes = {value: i for i, value in enumerate(headers) if value}
+                    indexes = {
+                        value.casefold().strip(): i
+                        for i, value in enumerate(headers)
+                        if value
+                    }
+                    source_index = next(
+                        i for key, i in indexes.items() if "technical api field" in key
+                    )
+                    target_index = indexes.get("field name", indexes.get("target field"))
                     for row in rows[header_index + 1:]:
-                        source_field = row[indexes["Technical API Field Name"]].strip()
-                        target_field = row[indexes["Field Name"]].strip()
+                        source_field = row[source_index].strip()
+                        target_field = row[target_index].strip()
                         if source_field or target_field:
                             mapping.append({
                                 "Source entity": row[0].strip(),
                                 "Source field": source_field,
                                 "Target field": target_field,
-                                "Type": row[indexes.get("Type", 3)].strip(),
-                                "Required": row[indexes.get("Required\nY/N", 20)].strip(),
+                                "Type": row[indexes.get("type", 3)].strip(),
+                                "Required": row[indexes.get("required\ny/n", 20)].strip(),
                             })
                 workbooks.append({"name": Path(member).name, "sheets": sheets, "mapping": mapping})
             except Exception:

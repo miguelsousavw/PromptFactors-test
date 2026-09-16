@@ -55,7 +55,7 @@ if not st.session_state["fsd_bytes"]:
 
 
 @st.cache_data(show_spinner=False)
-def _extract(data: bytes, filename: str):
+def _extract(data: bytes, filename: str, parser_version: str = "mapping-v2"):
     text = document_ingest.extract_text(data, filename)
     tables = document_ingest.extract_tables(data, filename)
     embedded = document_ingest.extract_embedded_workbooks(data, filename)
