@@ -23,7 +23,7 @@ import ingest
 import leanix_export
 import rules
 
-st.set_page_config(page_title="PromptFactors | Context Intelligence",
+st.set_page_config(page_title="Documentation Guider",
                    page_icon="🕸️", layout="wide")
 
 DEMO_SUCCESS_CONDITION = (
@@ -71,8 +71,8 @@ _init_state()
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.title("🕸️ PromptFactors")
-    st.caption("AI + LeanIX Context Intelligence · i.mobilothon 6.0")
+    st.title("🕸️ Documentation Guider")
+    st.caption("Documentation Guider · i.mobilothon 6.0")
 
     st.subheader("1 · Load architecture data")
     up = st.file_uploader(
@@ -140,7 +140,7 @@ elif st.session_state.get("generated"):
     file_name = st.session_state["generated_name"]
 
 if file_bytes is None:
-    st.title("AI + LeanIX Context Intelligence")
+    st.title("Documentation Guider")
     st.markdown(
         "Turn a LeanIX-style architecture workbook into **living context diagrams, "
         "traceable quality findings and answerable questions**."
@@ -173,7 +173,7 @@ if st.session_state["accepted_candidates"]:
 
 stats = graph_build.graph_stats(g)
 
-st.title("AI + LeanIX Context Intelligence")
+st.title("Documentation Guider")
 st.caption(f"Source: **{file_name}** · analysis is fully re-derived from this file")
 
 m = st.columns(6)
