@@ -111,14 +111,14 @@ with st.sidebar:
         accept_multiple_files=True,
         help="Upload one or more Functional Specification Documents.",
     )
-    if upload:
+    if upload is not None:
         uploaded = {}
         for item in upload:
             raw = item.getvalue()
             digest = hashlib.sha256(raw).hexdigest()
             uploaded[digest] = {"bytes": raw, "name": item.name, "digest": digest}
         old = st.session_state["fsd_documents"]
-        if set(uploaded) != set(old):
+        if uploaded != old:
             st.session_state["fsd_documents"] = uploaded
             st.session_state["fsd_workspace"] = 0
             st.session_state["fsd_profile"] = None
