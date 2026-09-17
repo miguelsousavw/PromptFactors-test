@@ -38,12 +38,19 @@ _GROUP_STOPWORDS = {
 
 def _normalise_system(value: str) -> str:
     """Make document labels comparable without changing their display form."""
-    return re.sub(r"[^a-z0-9]+", "", _canonical_system_name(value).casefold())
+    canonical = _canonical_system_name(value)
+    # An environment-only label is noise, not a real system.  Returning an
+    # empty key also prevents every ``TEST`` endpoint from grouping together.
+    if canonical == "Unnamed system":
+        return ""
+    return re.sub(r"[^a-z0-9]+", "", canonical.casefold())
 
 
 _ENVIRONMENT_SUFFIX = re.compile(
-    r"(?:^|[\s_.:/-])(?:prev\d+|prod\d*|test|quality|production|development|"
-    r"staging|sandbox|qa|uat|sit|dev|tst)(?=$|[\s_.:/-])",
+    # Treat punctuation such as ``(TEST)`` as a boundary too.  The token
+    # boundary deliberately avoids changing names such as ``Contest``.
+    r"(?<![a-z0-9])(?:prev\d+|prod\d*|test|quality|production|development|"
+    r"staging|sandbox|qa|uat|sit|dev|tst)(?![a-z0-9])",
     re.IGNORECASE,
 )
 
@@ -189,8 +196,15 @@ def build_combined_graph(profiles: Sequence[FSDProfile]) -> nx.MultiDiGraph:
         mapping = {}
         for node, data in graph.nodes(data=True):
             kind = data.get("kind", "application")
-            display_name = _canonical_system_name(data.get("name", node))
-            key = (kind, _normalise_system(display_name))
+            # Only systems and middleware carry deployment suffixes.  A data
+            # object called, for example, "Test" remains a distinct object.
+            if kind in {"application", "middleware"}:
+                display_name = _canonical_system_name(data.get("name", node))
+                logical_name = _normalise_system(display_name)
+            else:
+                display_name = _clean(data.get("name", node)) or str(node)
+                logical_name = re.sub(r"[^a-z0-9]+", "", display_name.casefold())
+            key = (kind, logical_name)
             canonical = canonical_nodes.get(key)
             if canonical is None:
                 canonical = f"system-{len(canonical_nodes)}"
