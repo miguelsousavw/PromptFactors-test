@@ -260,6 +260,29 @@ The model returns architecture candidates in JSON. Candidates are shown in an
 editable acceptance table; only checked rows are merged into the same
 deterministic graph. AI candidates are never silently exported as facts.
 
+### VW LLM extraction mode
+
+The sidebar can optionally send each extracted FSD text to the VW
+OpenAI-compatible Responses API and use its JSON as the input profile for the
+existing backend. This is an extraction step only: system normalization,
+environment removal, workspace grouping, graph construction, rules, diagrams,
+and exports remain deterministic. If credentials are missing or the request
+fails, the local deterministic parser is used.
+
+Configure credentials without committing them:
+
+```bash
+export VW_LLM_API_KEY="..."
+export VW_LLM_VIRTUAL_KEY="..."
+export VW_LLM_BASE_URL="https://llmapi.ai.vwgroup.com"
+export VW_LLM_MODEL="gpt-5-mini"
+```
+
+The client sends the virtual key as
+`X-LLM-API-CLIENT-ID: Bearer <virtual-key>` and uses `responses.create`.
+The model must return the documented JSON object; invalid or incomplete
+responses are not merged into the graph.
+
 ## Smoke checks
 
 ```bash

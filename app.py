@@ -128,6 +128,12 @@ with st.sidebar:
             st.session_state["chat"] = []
             st.session_state["fsd_chats"] = {}
             st.session_state["fsd_selection"] = "group:0"
+    use_llm_extraction = st.checkbox(
+        "Use VW LLM for FSD extraction",
+        value=bool(os.environ.get("VW_LLM_API_KEY")),
+        help="Send extracted FSD text to the configured VW Responses API. "
+             "The deterministic parser remains the fallback.",
+    )
 
 
 if not st.session_state["fsd_documents"]:
@@ -143,11 +149,24 @@ if not st.session_state["fsd_documents"]:
 
 
 @st.cache_data(show_spinner=False)
-def _extract(data: bytes, filename: str, parser_version: str = "mapping-v3"):
+def _extract(data: bytes, filename: str, use_llm: bool,
+             parser_version: str = "mapping-v3"):
     text = document_ingest.extract_text(data, filename)
     tables = document_ingest.extract_tables(data, filename)
     embedded = document_ingest.extract_embedded_workbooks(data, filename)
     profile = fsd_workflow.parse_fsd(text, tables, filename)
+    if use_llm:
+        client = ai_layer.VWResponsesClient()
+        if client.configured:
+            try:
+                result = ai_layer.parse_json_response(
+                    client.extract(ai_layer.prompt_extract_fsd(text, filename))
+                )
+                if result:
+                    profile = fsd_workflow.profile_from_llm(result, filename)
+            except ai_layer.LLMUnavailable:
+                # Keep the deterministic parser as an explicit, usable fallback.
+                pass
     embedded_fields = fsd_workflow.embedded_mapping_fields(embedded)
     if embedded_fields:
         profile.mapping_fields = embedded_fields
@@ -157,10 +176,15 @@ with st.spinner("Extracting FSDs and deriving integration profiles…"):
     documents = []
     try:
         for document in st.session_state["fsd_documents"].values():
-            text, profile, embedded = _extract(document["bytes"], document["name"])
+            text, profile, embedded = _extract(
+                document["bytes"], document["name"], use_llm_extraction
+            )
             documents.append({
                 **document, "text": text, "profile": profile, "embedded": embedded,
             })
+    except ai_layer.LLMUnavailable as exc:
+        st.warning(f"LLM extraction unavailable; deterministic extraction was not used for this run: {exc}")
+        st.stop()
     except Exception as exc:
         st.error(f"Could not read this FSD: {exc}")
         st.stop()

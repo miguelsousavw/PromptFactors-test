@@ -430,6 +430,41 @@ def parse_fsd(text: str, tables: list[list[list[str]]] | None = None,
                       mapping_fields)
 
 
+def profile_from_llm(data: dict, filename: str = "") -> FSDProfile:
+    """Convert validated LLM extraction facts into the existing domain model."""
+    def text_value(key: str, fallback: str = "Not stated") -> str:
+        value = data.get(key, fallback)
+        if isinstance(value, list):
+            return ", ".join(str(item) for item in value if item)
+        return str(value or fallback).strip()
+
+    middleware_components = data.get("middleware_components", data.get("middleware", []))
+    if isinstance(middleware_components, str):
+        middleware_components = [middleware_components]
+    middleware_components = [str(x).strip() for x in middleware_components or [] if str(x).strip()]
+    middleware_components = middleware_components or ["Integration middleware"]
+    mapping = data.get("mapping_fields", [])
+    if isinstance(mapping, list):
+        mapping_fields = [
+            f"{item.get('entity', '')}: {item.get('source', '')} → {item.get('target', '')}".strip(": ")
+            if isinstance(item, dict) else str(item)
+            for item in mapping
+        ]
+    else:
+        mapping_fields = []
+    objects = data.get("data_objects", [])
+    if isinstance(objects, str):
+        objects = [objects]
+    name = text_value("integration_name", re.sub(r"(?i)^fsd[_ -]*", "", filename).rsplit(".", 1)[0])
+    return FSDProfile(
+        name, text_value("source_system"), text_value("target_system"),
+        " + ".join(middleware_components), text_value("interface_type"),
+        text_value("criticality"), text_value("schedule"), text_value("owner"),
+        text_value("description"), [str(x) for x in objects if x],
+        text_value("encryption"), middleware_components, mapping_fields,
+    )
+
+
 def build_integration_graph(profile: FSDProfile) -> nx.MultiDiGraph:
     """Create a small LeanIX-style context graph for one integration."""
     g = nx.MultiDiGraph()

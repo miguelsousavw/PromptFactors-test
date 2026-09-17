@@ -21,12 +21,14 @@ import os
 from pathlib import Path
 
 import requests
+from openai import OpenAI
 
 CACHE_DIR = Path(__file__).parent / ".llm_cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
 DEFAULT_BASE_URL = "https://llmaas.ai.vwgroup.com/llm-api/v1"
 DEFAULT_MODEL = "claude-sonnet-4"
+VW_DEFAULT_BASE_URL = "https://llmapi.ai.vwgroup.com"
 
 SYSTEM_PROMPT = (
     "You are an enterprise architecture analyst. You will be given FACTS that "
@@ -43,6 +45,41 @@ SYSTEM_PROMPT = (
 
 class LLMUnavailable(Exception):
     """Raised when no key is configured or the endpoint cannot be reached."""
+
+
+class VWResponsesClient:
+    """OpenAI Responses API client used only for document fact extraction."""
+
+    def __init__(self, token: str | None = None, virtual_key: str | None = None,
+                 base_url: str | None = None, model: str | None = None):
+        self.token = (token or os.environ.get("VW_LLM_API_KEY") or "").strip()
+        self.virtual_key = (virtual_key or os.environ.get("VW_LLM_VIRTUAL_KEY") or "").strip()
+        self.base_url = (base_url or os.environ.get("VW_LLM_BASE_URL")
+                         or VW_DEFAULT_BASE_URL).rstrip("/")
+        self.model = model or os.environ.get("VW_LLM_MODEL") or "gpt-5-mini"
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.token and self.virtual_key)
+
+    def extract(self, prompt: str) -> str:
+        if not self.configured:
+            raise LLMUnavailable("VW LLM extraction credentials are not configured.")
+        try:
+            client = OpenAI(
+                base_url=self.base_url,
+                api_key=self.token,
+                default_headers={"X-LLM-API-CLIENT-ID": f"Bearer {self.virtual_key}"},
+            )
+            response = client.responses.create(model=self.model, input=prompt)
+            text = getattr(response, "output_text", "") or ""
+            if not text:
+                raise LLMUnavailable("VW LLM returned an empty extraction response.")
+            return text
+        except LLMUnavailable:
+            raise
+        except Exception as exc:
+            raise LLMUnavailable(f"VW LLM extraction failed: {exc}") from exc
 
 
 class LLMClient:
@@ -296,3 +333,24 @@ def parse_json_response(text: str) -> dict:
         return json.loads(t[start:end + 1])
     except json.JSONDecodeError:
         return {}
+
+
+def prompt_extract_fsd(text: str, filename: str) -> str:
+    """Request portable architecture facts for one FSD."""
+    return f"""Extract architecture facts from this Functional Specification Document.
+Return ONLY one JSON object, with no markdown and no extra keys:
+{{
+  "integration_name": "", "source_system": "", "target_system": "",
+  "middleware_components": [], "interface_type": "", "criticality": "",
+  "schedule": "", "owner": "", "description": "", "data_objects": [],
+  "encryption": "", "mapping_fields": [
+    {{"entity": "", "source": "", "target": ""}}
+  ],
+  "evidence": [{{"field": "", "quote": ""}}]
+}}
+Use empty strings or arrays when the document does not state a value. Never
+invent names, IDs, relationships, or values. Preserve system names as written;
+the application backend will normalize environments and deduplicate systems.
+Document: {filename}
+DOCUMENT TEXT:
+{text[:60000]}"""
