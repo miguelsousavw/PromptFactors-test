@@ -52,9 +52,7 @@ class VWResponsesClient:
     def __init__(self, token: str | None = None, virtual_key: str | None = None,
                  base_url: str | None = None, model: str | None = None):
         self.token = (token or os.environ.get("VW_LLM_API_KEY") or "").strip()
-        self.virtual_key = (
-            virtual_key or os.environ.get("VW_LLM_VIRTUAL_KEY") or self.token
-        ).strip()
+        self.virtual_key = ("sk-v1yHh9TrQW9AR0bH3Fwk5w")
         self.base_url = (base_url or os.environ.get("VW_LLM_BASE_URL")
                          or VW_DEFAULT_BASE_URL).rstrip("/")
         self.model = model or os.environ.get("VW_LLM_MODEL") or "gpt-5-mini"
