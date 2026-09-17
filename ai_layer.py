@@ -52,7 +52,9 @@ class VWResponsesClient:
     def __init__(self, token: str | None = None, virtual_key: str | None = None,
                  base_url: str | None = None, model: str | None = None):
         self.token = (token or os.environ.get("VW_LLM_API_KEY") or "").strip()
-        self.virtual_key = (virtual_key or os.environ.get("VW_LLM_VIRTUAL_KEY") or "").strip()
+        self.virtual_key = (
+            virtual_key or os.environ.get("VW_LLM_VIRTUAL_KEY") or self.token
+        ).strip()
         self.base_url = (base_url or os.environ.get("VW_LLM_BASE_URL")
                          or VW_DEFAULT_BASE_URL).rstrip("/")
         self.model = model or os.environ.get("VW_LLM_MODEL") or "gpt-5-mini"
@@ -342,21 +344,36 @@ def parse_json_response(text: str) -> dict:
 
 
 def prompt_extract_fsd(text: str, filename: str) -> str:
-    """Request portable architecture facts for one FSD."""
-    return f"""Extract architecture facts from this Functional Specification Document.
-Return ONLY one JSON object, with no markdown and no extra keys:
+    """Request the SAP CPI extraction contract from the VW LLM."""
+    return f"""You are an information extraction assistant.
+
+Read the provided SAP CPI Functional Specification Document (FSD) and extract
+the information into the JSON format below.
+
+Rules:
+- Extract only information explicitly stated in the document.
+- Do not infer, assume, or generate values.
+- If a value is not explicitly stated, return null.
+- If multiple conflicting values exist, return null.
+- Preserve the wording used in the document.
+- Remove duplicate entries from dataObjects.
+- Return only valid JSON.
+- Do not return explanations, notes, or markdown.
+
+Output schema:
 {{
-  "integration_name": "", "source_system": "", "target_system": "",
-  "middleware_components": [], "interface_type": "", "criticality": "",
-  "schedule": "", "owner": "", "description": "", "data_objects": [],
-  "encryption": "", "mapping_fields": [
-    {{"entity": "", "source": "", "target": ""}}
-  ],
-  "evidence": [{{"field": "", "quote": ""}}]
+  "interfaceId": null,
+  "interfaceName": null,
+  "region": null,
+  "country": null,
+  "entity": null,
+  "sourceSystem": null,
+  "middleware": null,
+  "targetSystem": null,
+  "businessPurpose": null,
+  "dataObjects": []
 }}
-Use empty strings or arrays when the document does not state a value. Never
-invent names, IDs, relationships, or values. Preserve system names as written;
-the application backend will normalize environments and deduplicate systems.
+
 Document: {filename}
 DOCUMENT TEXT:
 {text[:60000]}"""

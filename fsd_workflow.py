@@ -452,15 +452,28 @@ def profile_from_llm(data: dict, filename: str = "") -> FSDProfile:
         ]
     else:
         mapping_fields = []
-    objects = data.get("data_objects", [])
+    objects = data.get("data_objects", data.get("dataObjects", []))
     if isinstance(objects, str):
         objects = [objects]
-    name = text_value("integration_name", re.sub(r"(?i)^fsd[_ -]*", "", filename).rsplit(".", 1)[0])
+    unique_objects = []
+    for item in objects or []:
+        value = str(item).strip()
+        if value and value not in unique_objects:
+            unique_objects.append(value)
+    name = text_value(
+        "integration_name",
+        text_value(
+            "interfaceName",
+            re.sub(r"(?i)^fsd[_ -]*", "", filename).rsplit(".", 1)[0],
+        ),
+    )
+    description = text_value("description", text_value("businessPurpose"))
     return FSDProfile(
-        name, text_value("source_system"), text_value("target_system"),
-        " + ".join(middleware_components), text_value("interface_type"),
+        name, text_value("source_system", text_value("sourceSystem")),
+        text_value("target_system", text_value("targetSystem")),
+        " + ".join(middleware_components), text_value("interface_type", "SAP CPI"),
         text_value("criticality"), text_value("schedule"), text_value("owner"),
-        text_value("description"), [str(x) for x in objects if x],
+        description, unique_objects,
         text_value("encryption"), middleware_components, mapping_fields,
     )
 
