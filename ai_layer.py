@@ -21,7 +21,6 @@ import os
 from pathlib import Path
 
 import requests
-from openai import OpenAI
 
 CACHE_DIR = Path(__file__).parent / ".llm_cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -66,6 +65,13 @@ class VWResponsesClient:
         if not self.configured:
             raise LLMUnavailable("VW LLM extraction credentials are not configured.")
         try:
+            try:
+                from openai import OpenAI
+            except ImportError as exc:
+                raise LLMUnavailable(
+                    "The optional openai package is not installed. "
+                    "Redeploy after requirements.txt has been installed."
+                ) from exc
             client = OpenAI(
                 base_url=self.base_url,
                 api_key=self.token,
