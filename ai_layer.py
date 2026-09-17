@@ -91,7 +91,7 @@ class LLMClient:
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": "Bearer " + self.api_key,
                     "Content-Type": "application/json",
                 },
                 json=payload,

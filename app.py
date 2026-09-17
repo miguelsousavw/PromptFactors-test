@@ -6,6 +6,7 @@ review its deterministic integration profile, context diagram and chat.
 from __future__ import annotations
 
 import hashlib
+import os
 
 import streamlit as st
 
@@ -98,6 +99,7 @@ def _init_state() -> None:
     st.session_state.setdefault("fsd_documents", {})
     st.session_state.setdefault("fsd_workspace", 0)
     st.session_state.setdefault("fsd_chats", {})
+    st.session_state.setdefault("fsd_selection", "group:0")
 
 
 _init_state()
@@ -125,6 +127,7 @@ with st.sidebar:
             st.session_state["fsd_text"] = ""
             st.session_state["chat"] = []
             st.session_state["fsd_chats"] = {}
+            st.session_state["fsd_selection"] = "group:0"
 
 
 if not st.session_state["fsd_documents"]:
@@ -163,26 +166,52 @@ with st.spinner("Extracting FSDs and deriving integration profiles…"):
         st.stop()
 
 groups = fsd_workflow.group_fsd_profiles([item["profile"] for item in documents])
-if len(groups) > 1:
-    with st.sidebar:
-        st.subheader("Uploaded FSDs")
-        st.caption("Connected documents share a workspace; separate documents remain switchable.")
-        labels = [
-            ("Workspace " + str(i + 1) if len(group) > 1 else group[0].integration_name)
-            + " · " + ", ".join(
-                documents[[x["profile"] for x in documents].index(profile)]["name"]
-                for profile in group
+with st.sidebar:
+    if len(documents) > 1:
+        st.subheader("Choose an uploaded FSD")
+        st.caption("Switch directly between uploaded documents, or review connected FSDs together.")
+        document_options = [
+            (
+                f"document:{index}",
+                f"FSD · {document['name']}",
             )
-            for i, group in enumerate(groups)
+            for index, document in enumerate(documents)
         ]
-        st.session_state["fsd_workspace"] = st.selectbox(
-            "View", range(len(groups)), index=min(st.session_state["fsd_workspace"], len(groups) - 1),
-            format_func=lambda i: labels[i],
+        workspace_options = [
+            (
+                f"group:{index}",
+                "Combined workspace · " + " · ".join(
+                    documents[[x["profile"] for x in documents].index(profile)]["name"]
+                    for profile in group
+                ),
+            )
+            for index, group in enumerate(groups)
+            if len(group) > 1
+        ]
+        options = document_options + workspace_options
+        option_keys = [key for key, _ in options]
+        if st.session_state["fsd_selection"] not in option_keys:
+            st.session_state["fsd_selection"] = option_keys[0]
+        selected_key = st.selectbox(
+            "FSD view",
+            option_keys,
+            index=option_keys.index(st.session_state["fsd_selection"]),
+            format_func=lambda key: dict(options)[key],
         )
-st.session_state["fsd_workspace"] = min(
-    st.session_state["fsd_workspace"], len(groups) - 1
-)
-active_group = groups[st.session_state["fsd_workspace"]]
+        st.session_state["fsd_selection"] = selected_key
+
+selection = st.session_state["fsd_selection"]
+if selection.startswith("document:"):
+    selected_document_index = int(selection.split(":", 1)[1])
+    active_group = [documents[selected_document_index]["profile"]]
+    active_workspace_index = next(
+        index for index, group in enumerate(groups)
+        if documents[selected_document_index]["profile"] in group
+    )
+else:
+    active_workspace_index = int(selection.split(":", 1)[1])
+    active_group = groups[active_workspace_index]
+st.session_state["fsd_workspace"] = active_workspace_index
 active_profiles = list(active_group)
 active_documents = [
     document for document in documents if document["profile"] in active_profiles
@@ -210,7 +239,7 @@ if len(documents) > 1:
                 document["name"] for document in documents
                 if document["profile"] in group
             ]
-            marker = " ← current" if group is active_group else ""
+            marker = " ← current" if any(profile in active_group for profile in group) else ""
             st.write(f"**Workspace {index}**{marker}: " + " · ".join(names))
 st.markdown(profile.description)
 
@@ -353,11 +382,33 @@ with st.container(border=True):
         st.rerun()
 
 with st.expander("Optional AI phrasing"):
-    st.caption("Leave the key blank for the deterministic workflow above.")
-    key = st.text_input("LLMaaS API key", type="password")
+    st.caption(
+        "Leave the key blank for the deterministic workflow above. "
+        "Open WebUI must expose its OpenAI-compatible API to this app."
+    )
+    ai_base_url = st.text_input(
+        "Open WebUI API base URL",
+        value=os.environ.get("LLMAAS_BASE_URL", ai_layer.DEFAULT_BASE_URL),
+        help="Use the Open WebUI server URL ending in /api, for example "
+             "https://openwebui.example.com/api. The app adds /chat/completions.",
+    )
+    ai_model = st.text_input(
+        "Model",
+        value=os.environ.get("LLMAAS_MODEL", ai_layer.DEFAULT_MODEL),
+        help="The model identifier configured in Open WebUI.",
+    )
+    key = st.text_input(
+        "Open WebUI API key",
+        value=os.environ.get("LLMAAS_API_KEY", ""),
+        type="password",
+        help="Create this in Open WebUI under Settings → Account → API Keys.",
+    )
     if st.button("Explain this integration") and key:
-        client = ai_layer.LLMClient(api_key=key, base_url=ai_layer.DEFAULT_BASE_URL,
-                                    model=ai_layer.DEFAULT_MODEL)
+        client = ai_layer.LLMClient(
+            api_key=key,
+            base_url=ai_base_url,
+            model=ai_model,
+        )
         facts = "\n".join(f"{k}: {v}" for k, v in profile.as_dict().items())
         try:
             st.markdown(client.complete(

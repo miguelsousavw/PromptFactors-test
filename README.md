@@ -223,6 +223,26 @@ before the demo** — if the path differs, change `DEFAULT_BASE_URL` in
 `ai_layer.py`. This is the one thing in the app that has not been tested against
 the live endpoint.
 
+### Open WebUI
+
+Open WebUI can be used instead of LLMaaS when its API is reachable from the
+Streamlit deployment. Open WebUI's API is OpenAI-compatible, so set the base
+URL to the server URL ending in `/api` (not `/api/chat/completions`):
+
+```bash
+export LLMAAS_BASE_URL="https://openwebui.example.com/api"
+export LLMAAS_API_KEY="your-open-webui-api-key"
+export LLMAAS_MODEL="your-model-id"
+```
+
+The app sends requests to `/api/chat/completions` with
+`Authorization: Bearer <api-key>`. In the sidebar's **Optional AI phrasing**
+section, these values can also be entered per session. A local address such as
+`http://localhost:3000/api` works only when Streamlit and Open WebUI run on the
+same machine; for Streamlit Community Cloud, use a securely exposed HTTPS
+endpoint and store the values as app secrets or environment variables. Never
+commit the API key.
+
 ---
 
 *Team PromptFactors · Digital Solutions PT*
