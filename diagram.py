@@ -95,14 +95,17 @@ def _linear_positions(sub: nx.MultiDiGraph) -> dict[str, tuple[float, float]]:
     ordered.extend(n for n in middleware if n not in ordered)
     step = 1.0 / (len(ordered) + 1) if ordered else 1.0
     for i, node in enumerate(ordered, 1):
-        positions[node] = (i * step, 0.0)
+        # Keep middleware labels off the main application rail. This is
+        # especially important when several FSDs share one middleware node.
+        lane = 0.22 if i % 2 else -0.22
+        positions[node] = (i * step, lane)
     for i, node in enumerate(data):
-        positions[node] = (0.5, (i - (len(data) - 1) / 2) * 0.34)
+        positions[node] = (0.5, -0.55 - (i - (len(data) - 1) / 2) * 0.22)
 
     # Keep future node types visible without reintroducing a force-directed layout.
     missing = [n for n in nodes if n not in positions]
     for i, node in enumerate(missing):
-        positions[node] = (0.5, (i - (len(missing) - 1) / 2) * 0.34)
+        positions[node] = (0.5, -0.55 - (i - (len(missing) - 1) / 2) * 0.22)
     return positions
 
 
@@ -177,38 +180,48 @@ def render(sub: nx.MultiDiGraph, focus: str | None = None,
 
     # --- nodes ---------------------------------------------------------------
     nodes = sorted(sub.nodes())
-    fig.add_trace(go.Scatter(
-        x=[pos[n][0] for n in nodes],
-        y=[pos[n][1] for n in nodes],
-        mode="markers+text" if show_labels else "markers",
-        name="Participants / objects",
-        text=[sub.nodes[n].get("name", n) if show_labels else "" for n in nodes],
-        textposition="bottom center",
-        textfont=dict(size=12, color="#101828"),
-        hovertext=[_hover(n, sub.nodes[n], sub) for n in nodes],
-        hoverinfo="text",
-        marker=dict(
-            size=[_node_size(sub, n, focus) for n in nodes],
-            color=[_node_color(sub.nodes[n]) for n in nodes],
-            line=dict(
-                width=[3 if n == focus else 1.2 for n in nodes],
-                color=[FOCUS_RING if n == focus else "#FFFFFF" for n in nodes],
+    node_groups = [
+        ("application", "Systems", "bottom center"),
+        ("middleware", "Integration services", "top center"),
+        ("information_object", "Information", "bottom center"),
+    ]
+    for node_kind, node_name, text_position in node_groups:
+        group = [n for n in nodes if sub.nodes[n].get("kind") == node_kind]
+        if not group:
+            continue
+        fig.add_trace(go.Scatter(
+            x=[pos[n][0] for n in group],
+            y=[pos[n][1] for n in group],
+            mode="markers+text" if show_labels else "markers",
+            name=node_name,
+            text=[sub.nodes[n].get("name", n) if show_labels else "" for n in group],
+            textposition=text_position,
+            textfont=dict(size=14 if node_kind != "information_object" else 12,
+                          color="#001E50"),
+            hovertext=[_hover(n, sub.nodes[n], sub) for n in group],
+            hoverinfo="text",
+            marker=dict(
+                size=[max(22, _node_size(sub, n, focus) + 8) for n in group],
+                color=[_node_color(sub.nodes[n]) for n in group],
+                line=dict(
+                    width=[4 if n == focus else 2 for n in group],
+                    color=[FOCUS_RING if n == focus else "#FFFFFF" for n in group],
+                ),
             ),
-        ),
-        showlegend=False,
-    ))
+            showlegend=True,
+        ))
 
     fig.update_layout(
         title=dict(text=title, font=dict(size=18, color="#101828")),
         annotations=annotations,
-        height=540,
-        margin=dict(l=24, r=24, t=58, b=24),
+        height=620,
+        margin=dict(l=32, r=32, t=72, b=40),
         hovermode="closest",
         plot_bgcolor="#FFFFFF",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
                     font=dict(size=11, color="#344054")),
         xaxis=dict(visible=False, showgrid=False, zeroline=False, range=[-0.12, 1.12]),
-        yaxis=dict(visible=False, showgrid=False, zeroline=False, range=[-1.0, 1.0]),
+        yaxis=dict(visible=False, showgrid=False, zeroline=False, range=[-1.35, 0.95]),
         autosize=True,
     )
     return fig
