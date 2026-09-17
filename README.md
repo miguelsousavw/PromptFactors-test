@@ -229,11 +229,16 @@ the live endpoint.
 
 ## Document ingestion (MVP)
 
-The sidebar accepts `.txt`, `.md`, `.docx`, and `.pdf` design documents. Text is
-extracted locally, then (only after an explicit button press) sent to the optional
-LLM as bounded text. The model returns architecture candidates in JSON. Candidates
-are shown in an editable acceptance table; only checked rows are merged into the
-same deterministic graph. AI candidates are never silently exported as facts.
+The sidebar accepts one or more `.txt`, `.md`, `.docx`, and `.pdf` design
+documents. Each FSD is extracted and profiled deterministically. Documents that
+share a meaningful brand, system, or connected endpoint are shown in one
+workspace view; unrelated uploads appear in a switchable waterfall. Upload
+changes are fingerprinted, so cached extraction is reused only for unchanged
+bytes and chat state is isolated per workspace. Text is extracted locally, then
+(only after an explicit button press) sent to the optional LLM as bounded text.
+The model returns architecture candidates in JSON. Candidates are shown in an
+editable acceptance table; only checked rows are merged into the same
+deterministic graph. AI candidates are never silently exported as facts.
 
 ## Smoke checks
 

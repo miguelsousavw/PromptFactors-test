@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
+from collections.abc import Sequence
 
 import networkx as nx
 
@@ -25,6 +26,156 @@ class FSDProfile:
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+_GROUP_STOPWORDS = {
+    "application", "app", "api", "batch", "cloud", "data", "file", "flat",
+    "flow", "integration", "interface", "middleware", "platform", "service",
+    "system", "target", "source", "transfer", "unknown", "not", "stated",
+    "fsd", "document", "template", "deliverable",
+}
+
+
+def _normalise_system(value: str) -> str:
+    """Make document labels comparable without changing their display form."""
+    return re.sub(r"[^a-z0-9]+", "", _clean(value).casefold())
+
+
+def _brand_tokens(profile: FSDProfile) -> set[str]:
+    """Return meaningful vendor/brand tokens used by grouping.
+
+    Grouping deliberately uses tokens of at least three characters and ignores
+    generic architecture words.  This avoids putting unrelated documents that
+    merely say "source system" on one page.
+    """
+    values = (
+        profile.source_system, profile.target_system, profile.integration_name,
+        profile.middleware,
+    )
+    tokens = set()
+    for value in values:
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", value or ""):
+            normalized = _normalise_system(token)
+            if normalized and normalized not in _GROUP_STOPWORDS:
+                tokens.add(normalized)
+    return tokens
+
+
+def _profiles_related(left: FSDProfile, right: FSDProfile) -> bool:
+    """Whether two profiles belong to one workspace.
+
+    The criteria are intentionally symmetric and transitive (the caller
+    computes connected components): an exact source/target system overlap,
+    a shared meaningful brand token, or an endpoint-to-endpoint connection.
+    """
+    left_endpoints = {
+        _normalise_system(left.source_system), _normalise_system(left.target_system)
+    } - {""}
+    right_endpoints = {
+        _normalise_system(right.source_system), _normalise_system(right.target_system)
+    } - {""}
+    if left_endpoints & right_endpoints:
+        return True
+    if _brand_tokens(left) & _brand_tokens(right):
+        return True
+    return bool(
+        _normalise_system(left.target_system)
+        and _normalise_system(left.target_system)
+        in {_normalise_system(right.source_system), _normalise_system(right.target_system)}
+    ) or bool(
+        _normalise_system(right.target_system)
+        and _normalise_system(right.target_system)
+        in {_normalise_system(left.source_system), _normalise_system(left.target_system)}
+    )
+
+
+def group_fsd_profiles(profiles: Sequence[FSDProfile]) -> list[list[FSDProfile]]:
+    """Group FSDs into deterministic workspace pages.
+
+    Groups are connected components under :func:`_profiles_related`, retaining
+    input order.  Thus A→B and B→C share a page even when A and C do not
+    mention the same system directly.  A single profile returns one group,
+    preserving the original workflow.
+    """
+    profiles = list(profiles)
+    groups: list[list[FSDProfile]] = []
+    for profile in profiles:
+        matching = [i for i, group in enumerate(groups)
+                    if any(_profiles_related(profile, item) for item in group)]
+        if not matching:
+            groups.append([profile])
+            continue
+        first = matching[0]
+        groups[first].append(profile)
+        for index in reversed(matching[1:]):
+            groups[first].extend(groups.pop(index))
+    return groups
+
+
+def merge_fsd_profiles(profiles: Sequence[FSDProfile]) -> FSDProfile:
+    """Create the display profile for a grouped workspace."""
+    items = list(profiles)
+    if not items:
+        raise ValueError("at least one FSD profile is required")
+    if len(items) == 1:
+        return items[0]
+
+    def join(values: Sequence[str], fallback: str = "Not stated") -> str:
+        unique = []
+        for value in values:
+            value = _clean(value)
+            if value and value not in unique:
+                unique.append(value)
+        return " · ".join(unique) or fallback
+
+    components = []
+    for item in items:
+        for component in getattr(item, "middleware_components", []) or [item.middleware]:
+            if component and component.casefold() not in {x.casefold() for x in components}:
+                components.append(component)
+    data_objects = []
+    mapping_fields = []
+    for item in items:
+        for value in item.data_objects:
+            if value not in data_objects:
+                data_objects.append(value)
+        for value in getattr(item, "mapping_fields", []):
+            if value not in mapping_fields:
+                mapping_fields.append(value)
+    return FSDProfile(
+        integration_name=f"{len(items)} connected FSDs",
+        source_system=join([x.source_system for x in items]),
+        target_system=join([x.target_system for x in items]),
+        middleware=" + ".join(components) or "Integration middleware",
+        interface_type=join([x.interface_type for x in items]),
+        criticality=join([x.criticality for x in items]),
+        schedule=join([x.schedule for x in items]),
+        owner=join([x.owner for x in items]),
+        description="Combined deterministic view of: " + ", ".join(
+            x.integration_name for x in items
+        ),
+        data_objects=data_objects[:8],
+        encryption=join([x.encryption for x in items]),
+        middleware_components=components or ["Integration middleware"],
+        mapping_fields=mapping_fields[:100],
+    )
+
+
+def build_combined_graph(profiles: Sequence[FSDProfile]) -> nx.MultiDiGraph:
+    """Merge per-FSD graphs while keeping duplicate node names distinct."""
+    combined = nx.MultiDiGraph()
+    for index, profile in enumerate(profiles):
+        graph = build_integration_graph(profile)
+        mapping = {node: f"fsd-{index}-{node}" for node in graph.nodes}
+        combined.add_nodes_from(
+            (mapping[node], {**data, "fsd_index": index})
+            for node, data in graph.nodes(data=True)
+        )
+        combined.add_edges_from(
+            (mapping[source], mapping[target], data)
+            for source, target, data in graph.edges(data=True)
+        )
+    return combined
 
 
 def _clean(value: str) -> str:

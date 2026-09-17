@@ -5,6 +5,8 @@ review its deterministic integration profile, context diagram and chat.
 """
 from __future__ import annotations
 
+import hashlib
+
 import streamlit as st
 
 import ai_layer
@@ -86,33 +88,46 @@ st.markdown(
 
 
 def _init_state() -> None:
+    # Keep the legacy keys: bookmarks from the single-FSD workflow remain
+    # readable while the document registry handles any number of uploads.
     st.session_state.setdefault("fsd_bytes", None)
     st.session_state.setdefault("fsd_name", "")
     st.session_state.setdefault("fsd_profile", None)
     st.session_state.setdefault("fsd_text", "")
     st.session_state.setdefault("chat", [])
+    st.session_state.setdefault("fsd_documents", {})
+    st.session_state.setdefault("fsd_workspace", 0)
+    st.session_state.setdefault("fsd_chats", {})
 
 
 _init_state()
 
 with st.sidebar:
     st.title("🔗 FSD workspace")
-    st.caption("Single-document integration review")
+    st.caption("Multi-document integration review")
     upload = st.file_uploader(
-        "Upload FSD",
+        "Upload FSDs",
         type=["docx", "pdf", "txt", "md"],
-        help="Upload a Functional Specification Document to start the workflow.",
+        accept_multiple_files=True,
+        help="Upload one or more Functional Specification Documents.",
     )
-    if upload is not None:
-        raw = upload.getvalue()
-        if raw != st.session_state["fsd_bytes"] or upload.name != st.session_state["fsd_name"]:
-            st.session_state.update(
-                fsd_bytes=raw, fsd_name=upload.name, fsd_profile=None,
-                fsd_text="", chat=[],
-            )
+    if upload:
+        uploaded = {}
+        for item in upload:
+            raw = item.getvalue()
+            digest = hashlib.sha256(raw).hexdigest()
+            uploaded[digest] = {"bytes": raw, "name": item.name, "digest": digest}
+        old = st.session_state["fsd_documents"]
+        if set(uploaded) != set(old):
+            st.session_state["fsd_documents"] = uploaded
+            st.session_state["fsd_workspace"] = 0
+            st.session_state["fsd_profile"] = None
+            st.session_state["fsd_text"] = ""
+            st.session_state["chat"] = []
+            st.session_state["fsd_chats"] = {}
 
 
-if not st.session_state["fsd_bytes"]:
+if not st.session_state["fsd_documents"]:
     st.title("FSD Integration Workspace")
     st.subheader("Upload an FSD to begin")
     st.markdown(
@@ -125,30 +140,78 @@ if not st.session_state["fsd_bytes"]:
 
 
 @st.cache_data(show_spinner=False)
-def _extract(data: bytes, filename: str, parser_version: str = "mapping-v2"):
+def _extract(data: bytes, filename: str, parser_version: str = "mapping-v3"):
     text = document_ingest.extract_text(data, filename)
     tables = document_ingest.extract_tables(data, filename)
     embedded = document_ingest.extract_embedded_workbooks(data, filename)
-    return text, fsd_workflow.parse_fsd(text, tables, filename), embedded
+    profile = fsd_workflow.parse_fsd(text, tables, filename)
+    embedded_fields = fsd_workflow.embedded_mapping_fields(embedded)
+    if embedded_fields:
+        profile.mapping_fields = embedded_fields
+    return text, profile, embedded
 
-
-with st.spinner("Extracting FSD and deriving integration profile…"):
+with st.spinner("Extracting FSDs and deriving integration profiles…"):
+    documents = []
     try:
-        text, profile, embedded_workbooks = _extract(
-            st.session_state["fsd_bytes"], st.session_state["fsd_name"]
-        )
-        embedded_fields = fsd_workflow.embedded_mapping_fields(embedded_workbooks)
-        if embedded_fields:
-            profile.mapping_fields = embedded_fields
+        for document in st.session_state["fsd_documents"].values():
+            text, profile, embedded = _extract(document["bytes"], document["name"])
+            documents.append({
+                **document, "text": text, "profile": profile, "embedded": embedded,
+            })
     except Exception as exc:
         st.error(f"Could not read this FSD: {exc}")
         st.stop()
+
+groups = fsd_workflow.group_fsd_profiles([item["profile"] for item in documents])
+if len(groups) > 1:
+    with st.sidebar:
+        st.subheader("Uploaded FSDs")
+        st.caption("Connected documents share a workspace; separate documents remain switchable.")
+        labels = [
+            ("Workspace " + str(i + 1) if len(group) > 1 else group[0].integration_name)
+            + " · " + ", ".join(
+                documents[[x["profile"] for x in documents].index(profile)]["name"]
+                for profile in group
+            )
+            for i, group in enumerate(groups)
+        ]
+        st.session_state["fsd_workspace"] = st.selectbox(
+            "View", range(len(groups)), index=min(st.session_state["fsd_workspace"], len(groups) - 1),
+            format_func=lambda i: labels[i],
+        )
+st.session_state["fsd_workspace"] = min(
+    st.session_state["fsd_workspace"], len(groups) - 1
+)
+active_group = groups[st.session_state["fsd_workspace"]]
+active_profiles = list(active_group)
+active_documents = [
+    document for document in documents if document["profile"] in active_profiles
+]
+profile = fsd_workflow.merge_fsd_profiles(active_profiles)
+text = "\n\n".join(document["text"] for document in active_documents)
+embedded_workbooks = [
+    workbook for document in active_documents for workbook in document["embedded"]
+]
+graph = fsd_workflow.build_combined_graph(active_profiles)
+workspace_key = "|".join(document["digest"] for document in active_documents)
 st.session_state["fsd_text"] = text
 st.session_state["fsd_profile"] = profile
-graph = fsd_workflow.build_integration_graph(profile)
+st.session_state["fsd_name"] = ", ".join(document["name"] for document in active_documents)
+st.session_state["chat"] = st.session_state["fsd_chats"].setdefault(workspace_key, [])
 
 st.title(profile.integration_name)
-st.caption(f"Source document: **{st.session_state['fsd_name']}** · deterministic extraction")
+st.caption(f"Source document(s): **{st.session_state['fsd_name']}** · deterministic extraction")
+if len(active_documents) > 1:
+    st.success(f"Combined workspace: {len(active_documents)} connected FSDs")
+if len(documents) > 1:
+    with st.expander("Uploaded FSD waterfall", expanded=len(groups) > 1):
+        for index, group in enumerate(groups, 1):
+            names = [
+                document["name"] for document in documents
+                if document["profile"] in group
+            ]
+            marker = " ← current" if group is active_group else ""
+            st.write(f"**Workspace {index}**{marker}: " + " · ".join(names))
 st.markdown(profile.description)
 
 cards = st.columns(4)
