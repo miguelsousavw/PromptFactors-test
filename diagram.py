@@ -14,9 +14,9 @@ import networkx as nx
 import plotly.graph_objects as go
 
 EDGE_STYLE = {
-    "relationship": {"color": "#64748B", "dash": "dot", "name": "Dependency"},
-    "interface": {"color": "#155EEF", "dash": "solid", "name": "Interface"},
-    "information_flow": {"color": "#087443", "dash": "dash", "name": "Information flow"},
+    "relationship": {"color": "#667085", "dash": "dot", "name": "Dependency"},
+    "interface": {"color": "#001E50", "dash": "solid", "name": "Interface"},
+    "information_flow": {"color": "#00B956", "dash": "dash", "name": "Information flow"},
 }
 
 CRIT_COLOR = {
@@ -26,17 +26,17 @@ CRIT_COLOR = {
     "administrative": "#667085",
 }
 GHOST_COLOR = "#344054"
-FOCUS_RING = "#101828"
+FOCUS_RING = "#00B956"
 
 
 def _node_color(data: dict) -> str:
     if data.get("ghost"):
         return GHOST_COLOR
     if data.get("kind") == "middleware":
-        return "#7F56D9"
+        return "#4B3F8F"
     if data.get("kind") == "information_object":
-        return "#0086C9"
-    return CRIT_COLOR.get(str(data.get("criticality", "")).lower(), "#98A2B3")
+        return "#007C91"
+    return CRIT_COLOR.get(str(data.get("criticality", "")).lower(), "#667085")
 
 
 def _node_size(g: nx.MultiDiGraph, node: str, focus: str | None) -> int:

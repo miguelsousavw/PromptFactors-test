@@ -14,6 +14,76 @@ import fsd_workflow
 
 st.set_page_config(page_title="FSD Integration Workspace", page_icon="🔗", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    :root {
+        --vw-deep-blue: #001E50;
+        --vw-green: #00B956;
+        --vw-neon: #00FF87;
+        --vw-ink: #172B4D;
+        --vw-muted: #667085;
+        --vw-surface: #FFFFFF;
+        --vw-background: #F5F7FA;
+        --vw-border: #D9E2EC;
+    }
+    .stApp { background: var(--vw-background); color: var(--vw-ink); }
+    [data-testid="stSidebar"] {
+        background: var(--vw-deep-blue);
+        border-right: 0;
+    }
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+        background: rgba(255,255,255,.1);
+        border: 1px dashed rgba(255,255,255,.55);
+    }
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+        background: var(--vw-green);
+        color: var(--vw-deep-blue) !important;
+        border: 0;
+    }
+    h1, h2, h3 { color: var(--vw-deep-blue); letter-spacing: -0.02em; }
+    h1 { font-weight: 750; }
+    [data-testid="stMetric"] {
+        background: var(--vw-surface);
+        border: 1px solid var(--vw-border);
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: 0 2px 8px rgba(0,30,80,.05);
+    }
+    [data-testid="stMetricLabel"] { color: var(--vw-muted); }
+    [data-testid="stMetricValue"] { color: var(--vw-deep-blue); }
+    .stButton > button, [data-testid="stDownloadButton"] button {
+        background: var(--vw-deep-blue);
+        color: #FFFFFF;
+        border: 0;
+        border-radius: 8px;
+        font-weight: 650;
+    }
+    .stButton > button:hover, [data-testid="stDownloadButton"] button:hover {
+        background: #123B73;
+        color: #FFFFFF;
+    }
+    [data-testid="stAlert"] { border-radius: 10px; }
+    [data-testid="stExpander"] {
+        background: var(--vw-surface);
+        border: 1px solid var(--vw-border);
+        border-radius: 12px;
+    }
+    .mapping-visual {
+        background: var(--vw-surface);
+        border: 1px solid var(--vw-border);
+        border-radius: 12px;
+        padding: 22px 24px 10px;
+    }
+    .mapping-entity { color: var(--vw-deep-blue) !important; }
+    .mapping-dot, .mapping-line { color: var(--vw-green) !important; }
+    .mapping-target { color: var(--vw-muted) !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def _init_state() -> None:
     st.session_state.setdefault("fsd_bytes", None)
