@@ -155,32 +155,35 @@ def _extract(data: bytes, filename: str, use_llm: bool,
     tables = document_ingest.extract_tables(data, filename)
     embedded = document_ingest.extract_embedded_workbooks(data, filename)
     profile = fsd_workflow.parse_fsd(text, tables, filename)
+    llm_response = ""
     if use_llm:
         client = ai_layer.VWResponsesClient()
         if client.configured:
             try:
-                result = ai_layer.parse_json_response(
-                    client.extract(ai_layer.prompt_extract_fsd(text, filename))
+                llm_response = client.extract(
+                    ai_layer.prompt_extract_fsd(text, filename)
                 )
+                result = ai_layer.parse_json_response(llm_response)
                 if result:
                     profile = fsd_workflow.profile_from_llm(result, filename)
             except ai_layer.LLMUnavailable:
                 # Keep the deterministic parser as an explicit, usable fallback.
-                pass
+                llm_response = ""
     embedded_fields = fsd_workflow.embedded_mapping_fields(embedded)
     if embedded_fields:
         profile.mapping_fields = embedded_fields
-    return text, profile, embedded
+    return text, profile, embedded, llm_response
 
 with st.spinner("Extracting FSDs and deriving integration profiles…"):
     documents = []
     try:
         for document in st.session_state["fsd_documents"].values():
-            text, profile, embedded = _extract(
+            text, profile, embedded, llm_response = _extract(
                 document["bytes"], document["name"], use_llm_extraction
             )
             documents.append({
                 **document, "text": text, "profile": profile, "embedded": embedded,
+                "llm_response": llm_response,
             })
     except ai_layer.LLMUnavailable as exc:
         st.warning(f"LLM extraction unavailable; deterministic extraction was not used for this run: {exc}")
@@ -254,6 +257,28 @@ st.session_state["chat"] = st.session_state["fsd_chats"].setdefault(workspace_ke
 
 st.title(profile.integration_name)
 st.caption(f"Source document(s): **{st.session_state['fsd_name']}** · deterministic extraction")
+llm_responses = [
+    (document["name"], document["llm_response"])
+    for document in active_documents
+    if document.get("llm_response")
+]
+if llm_responses:
+    with st.expander(
+        f"LLM response received · {len(llm_responses)} request"
+        f"{'s' if len(llm_responses) != 1 else ''}",
+        expanded=True,
+    ):
+        st.success("The FSD extraction request completed successfully.")
+        for filename, response in llm_responses:
+            st.markdown(f"**Response for `{filename}`**")
+            st.text_area(
+                "Raw JSON returned by the LLM",
+                response,
+                height=280,
+                key=f"llm-response-{hashlib.sha256(filename.encode()).hexdigest()[:12]}",
+                disabled=True,
+                label_visibility="collapsed",
+            )
 if len(active_documents) > 1:
     st.success(f"Combined workspace: {len(active_documents)} connected FSDs")
 if len(documents) > 1:
