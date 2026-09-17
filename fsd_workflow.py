@@ -38,7 +38,25 @@ _GROUP_STOPWORDS = {
 
 def _normalise_system(value: str) -> str:
     """Make document labels comparable without changing their display form."""
-    return re.sub(r"[^a-z0-9]+", "", _clean(value).casefold())
+    return re.sub(r"[^a-z0-9]+", "", _canonical_system_name(value).casefold())
+
+
+_ENVIRONMENT_SUFFIX = re.compile(
+    r"(?:^|[\s_.:/-])(?:prev\d+|prod\d*|test|quality|production|development|"
+    r"staging|sandbox|qa|uat|sit|dev|tst)(?=$|[\s_.:/-])",
+    re.IGNORECASE,
+)
+
+
+def _canonical_system_name(value: str) -> str:
+    """Remove deployment-environment labels while retaining the logical system."""
+    name = _clean(value)
+    previous = None
+    while name and name != previous:
+        previous = name
+        name = _ENVIRONMENT_SUFFIX.sub(" ", name)
+        name = re.sub(r"\s+", " ", name).strip(" -_/.:")
+    return name or "Unnamed system"
 
 
 def _brand_tokens(profile: FSDProfile) -> set[str]:
@@ -123,7 +141,7 @@ def merge_fsd_profiles(profiles: Sequence[FSDProfile]) -> FSDProfile:
     def join(values: Sequence[str], fallback: str = "Not stated") -> str:
         unique = []
         for value in values:
-            value = _clean(value)
+            value = _canonical_system_name(value)
             if value and value not in unique:
                 unique.append(value)
         return " · ".join(unique) or fallback
@@ -131,6 +149,7 @@ def merge_fsd_profiles(profiles: Sequence[FSDProfile]) -> FSDProfile:
     components = []
     for item in items:
         for component in getattr(item, "middleware_components", []) or [item.middleware]:
+            component = _canonical_system_name(component)
             if component and component.casefold() not in {x.casefold() for x in components}:
                 components.append(component)
     data_objects = []
@@ -162,19 +181,28 @@ def merge_fsd_profiles(profiles: Sequence[FSDProfile]) -> FSDProfile:
 
 
 def build_combined_graph(profiles: Sequence[FSDProfile]) -> nx.MultiDiGraph:
-    """Merge per-FSD graphs while keeping duplicate node names distinct."""
+    """Merge per-FSD graphs by logical system, not deployment environment."""
     combined = nx.MultiDiGraph()
+    canonical_nodes: dict[tuple[str, str], str] = {}
     for index, profile in enumerate(profiles):
         graph = build_integration_graph(profile)
-        mapping = {node: f"fsd-{index}-{node}" for node in graph.nodes}
-        combined.add_nodes_from(
-            (mapping[node], {**data, "fsd_index": index})
-            for node, data in graph.nodes(data=True)
-        )
-        combined.add_edges_from(
-            (mapping[source], mapping[target], data)
-            for source, target, data in graph.edges(data=True)
-        )
+        mapping = {}
+        for node, data in graph.nodes(data=True):
+            kind = data.get("kind", "application")
+            display_name = _canonical_system_name(data.get("name", node))
+            key = (kind, _normalise_system(display_name))
+            canonical = canonical_nodes.get(key)
+            if canonical is None:
+                canonical = f"system-{len(canonical_nodes)}"
+                canonical_nodes[key] = canonical
+                node_data = {**data, "name": display_name, "fsd_index": index}
+                combined.add_node(canonical, **node_data)
+            else:
+                combined.nodes[canonical].setdefault("fsd_index", index)
+            mapping[node] = canonical
+        for source, target, data in graph.edges(data=True):
+            if mapping[source] != mapping[target]:
+                combined.add_edge(mapping[source], mapping[target], **data)
     return combined
 
 
